@@ -1,6 +1,6 @@
 import React, { useState, useEffect, lazy, Suspense } from 'react';
-// Fix: Use namespace import for react-router-dom to resolve module resolution issues.
-import * as ReactRouterDOM from 'react-router-dom';
+// FIX: Use named imports for react-router-dom v6.
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import firebase from 'firebase/compat/app';
 import { auth, db } from './utils/firebase';
 
@@ -44,6 +44,8 @@ const App: React.FC = () => {
             // Admin check takes highest priority
             if (data.isAdmin === true) {
               setAuthStatus('admin');
+            } else if (data.status === 'onboarding_required') {
+              setAuthStatus('needs_onboarding');
             } else if (data.status === 'pending') {
               setAuthStatus('pending_approval');
             } else if (data.status === 'active') {
@@ -55,8 +57,11 @@ const App: React.FC = () => {
               setAuthStatus('unauthenticated');
             }
           } else {
-            // No listener document means they need to go through onboarding.
-            setAuthStatus('needs_onboarding');
+            // If an auth user exists but has no listener doc, they are unauthorized for this app.
+            // This can happen if an application was rejected and the auth user was not cleaned up.
+            console.warn(`No listener document found for authenticated user ${firebaseUser.uid}. Logging out.`);
+            await auth.signOut();
+            setAuthStatus('unauthenticated');
           }
         } catch (error) {
             console.error("Error checking listener status:", error);
@@ -76,65 +81,65 @@ const App: React.FC = () => {
   }
 
   return (
-    <ReactRouterDOM.HashRouter>
+    <HashRouter>
       <Suspense fallback={<SplashScreen />}>
-        <ReactRouterDOM.Routes>
+        <Routes>
           {authStatus === 'unauthenticated' && (
             <>
-              <ReactRouterDOM.Route path="/login" element={<LoginScreen />} />
-              <ReactRouterDOM.Route path="*" element={<ReactRouterDOM.Navigate to="/login" replace />} />
+              <Route path="/login" element={<LoginScreen />} />
+              <Route path="*" element={<Navigate to="/login" replace />} />
             </>
           )}
 
           {authStatus === 'needs_onboarding' && user && (
             <>
-              <ReactRouterDOM.Route path="/onboarding" element={<OnboardingScreen user={user} />} />
-              <ReactRouterDOM.Route path="*" element={<ReactRouterDOM.Navigate to="/onboarding" replace />} />
+              <Route path="/onboarding" element={<OnboardingScreen user={user} />} />
+              <Route path="*" element={<Navigate to="/onboarding" replace />} />
             </>
           )}
 
           {authStatus === 'pending_approval' && (
              <>
-              <ReactRouterDOM.Route path="/pending-approval" element={<PendingApprovalScreen />} />
-              <ReactRouterDOM.Route path="*" element={<ReactRouterDOM.Navigate to="/pending-approval" replace />} />
+              <Route path="/pending-approval" element={<PendingApprovalScreen />} />
+              <Route path="*" element={<Navigate to="/pending-approval" replace />} />
             </>
           )}
 
           {authStatus === 'admin' && (
             <>
-              <ReactRouterDOM.Route path="/admin" element={<AdminDashboardScreen />} />
-              <ReactRouterDOM.Route path="/admin/listeners" element={<ListenerManagementScreen />} />
-              <ReactRouterDOM.Route path="*" element={<ReactRouterDOM.Navigate to="/admin" replace />} />
+              <Route path="/admin" element={<AdminDashboardScreen />} />
+              <Route path="/admin/listeners" element={<ListenerManagementScreen />} />
+              <Route path="*" element={<Navigate to="/admin" replace />} />
             </>
           )}
 
           {authStatus === 'active' && user && (
             <>
-              <ReactRouterDOM.Route path="/call/:callId" element={
+              <Route path="/call/:callId" element={
                 <ListenerProvider user={user}>
                   <ActiveCallScreen />
                 </ListenerProvider>
               } />
-              <ReactRouterDOM.Route path="/" element={
+              <Route path="/" element={
                 <ListenerProvider user={user}>
                   <MainLayout />
                 </ListenerProvider>
               }>
-                <ReactRouterDOM.Route index element={<ReactRouterDOM.Navigate to="/dashboard" replace />} />
-                <ReactRouterDOM.Route path="dashboard" element={<DashboardScreen />} />
-                <ReactRouterDOM.Route path="calls" element={<CallsScreen />} />
-                <ReactRouterDOM.Route path="chat" element={<ChatScreen />} />
-                <ReactRouterDOM.Route path="earnings" element={<EarningsScreen />} />
-                <ReactRouterDOM.Route path="profile" element={<ProfileScreen />} />
-                <ReactRouterDOM.Route path="terms" element={<TermsScreen />} />
-                <ReactRouterDOM.Route path="privacy" element={<PrivacyPolicyScreen />} />
-              </ReactRouterDOM.Route>
-              <ReactRouterDOM.Route path="*" element={<ReactRouterDOM.Navigate to="/dashboard" replace />} />
+                <Route index element={<Navigate to="/dashboard" replace />} />
+                <Route path="dashboard" element={<DashboardScreen />} />
+                <Route path="calls" element={<CallsScreen />} />
+                <Route path="chat" element={<ChatScreen />} />
+                <Route path="earnings" element={<EarningsScreen />} />
+                <Route path="profile" element={<ProfileScreen />} />
+                <Route path="terms" element={<TermsScreen />} />
+                <Route path="privacy" element={<PrivacyPolicyScreen />} />
+              </Route>
+              <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </>
           )}
-        </ReactRouterDOM.Routes>
+        </Routes>
       </Suspense>
-    </ReactRouterDOM.HashRouter>
+    </HashRouter>
   );
 };
 
