@@ -1,14 +1,12 @@
-
-
 import React, { useState, useEffect, useMemo } from 'react';
 // FIX: The import for `Link` is correct for react-router-dom v5. The error was likely a cascading issue from other files using v6 syntax.
 import { Link } from 'react-router-dom';
-import { useListener } from './../context/ListenerContext';
-import { db } from './../utils/firebase';
+import { useListener } from '../../context/ListenerContext';
+import { db } from '../../utils/firebase';
 import firebase from 'firebase/compat/app';
 // Fix: Use ListenerAppStatus instead of the non-existent ListenerStatus.
-import type { CallRecord, ListenerChatSession, ListenerAppStatus } from '../types';
-import InstallPWAButton from '../components/common/InstallPWAButton';
+import type { CallRecord, ListenerChatSession, ListenerAppStatus } from '../../types';
+import InstallPWAButton from '../../components/common/InstallPWAButton';
 
 // Type definitions for combined activity feed
 // Fix: Use Omit to prevent type conflict on 'type' property from CallRecord.
@@ -93,30 +91,11 @@ const ActivityRow: React.FC<{ activity: Activity }> = ({ activity }) => {
 };
 
 
-const DisabledStatusToggle: React.FC<{ message: string }> = ({ message }) => (
-    <div className="bg-white dark:bg-slate-800 p-3 rounded-xl shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4 opacity-60">
-        <div className="flex-grow text-center sm:text-left">
-            <h3 className="font-bold text-base text-slate-800 dark:text-slate-200">Active Status</h3>
-            <p className="text-xs text-red-500 dark:text-red-400 mt-1">{message}</p>
-        </div>
-        <div className="inline-flex items-stretch rounded-full border border-slate-300 dark:border-slate-600 p-1 flex-shrink-0 cursor-not-allowed">
-            <span className="px-4 py-1.5 rounded-full text-sm font-semibold text-slate-400 dark:text-slate-500">Offline</span>
-            <div className="w-px bg-slate-300 dark:bg-slate-600"></div>
-            <span className="px-4 py-1.5 rounded-full text-sm font-semibold text-slate-400 dark:text-slate-500">Busy</span>
-            <div className="w-px bg-slate-300 dark:bg-slate-600"></div>
-            <span className="px-4 py-1.5 rounded-full text-sm font-semibold text-slate-400 dark:text-slate-500">Online</span>
-        </div>
-    </div>
-);
-
 const StatusToggle: React.FC = () => {
     const { profile, loading: profileLoading } = useListener();
-    // Fix: Use ListenerAppStatus type.
     const [optimisticStatus, setOptimisticStatus] = useState<ListenerAppStatus | null>(null);
 
-    // Sync local state with profile from context
     useEffect(() => {
-        // Fix: Use profile.appStatus instead of profile.status.
         if (profile?.appStatus) {
             setOptimisticStatus(profile.appStatus);
         } else if (!profileLoading && !profile) {
@@ -124,47 +103,52 @@ const StatusToggle: React.FC = () => {
         }
     }, [profile, profileLoading]);
     
-    // Fix: Use ListenerAppStatus type.
     const handleStatusChange = async (newStatus: ListenerAppStatus) => {
-        if (!profile) return;
+        if (!profile || newStatus === optimisticStatus) return;
 
-        // Fix: Use profile.appStatus instead of profile.status.
         const previousStatus = optimisticStatus || profile.appStatus;
-        setOptimisticStatus(newStatus); // Optimistically update the UI
+        setOptimisticStatus(newStatus); 
 
         try {
-            // Fix: Update appStatus field instead of status.
             await db.collection('listeners').doc(profile.uid).update({ appStatus: newStatus });
         } catch (error) {
             console.error("Failed to update status:", error);
-            // Revert on error
             setOptimisticStatus(previousStatus);
             alert("Failed to update status. Please check your connection and try again.");
         }
     };
     
     if (profileLoading) {
-        return <div className="h-20 bg-slate-200 dark:bg-slate-700 rounded-xl animate-pulse"></div>;
+        return <div className="h-[74px] bg-slate-200 dark:bg-slate-700 rounded-xl animate-pulse"></div>;
     }
 
-    if (!profile) {
-        return <DisabledStatusToggle message="Listener profile could not be found." />;
+    if (!profile || !optimisticStatus) {
+         return (
+            <div className="bg-white dark:bg-slate-800 p-2 rounded-xl shadow-sm opacity-60">
+                <div className="flex items-center justify-between gap-4">
+                    <h3 className="font-semibold text-sm text-slate-800 dark:text-slate-200">
+                        Active Status
+                    </h3>
+                    <div className="inline-flex items-stretch rounded-full border border-slate-300 dark:border-slate-600 cursor-not-allowed">
+                        <span className="px-4 py-1 text-xs font-semibold text-slate-500 dark:text-slate-400">Offline</span>
+                        <div className="w-px bg-slate-300 dark:bg-slate-600"></div>
+                        <span className="px-4 py-1 text-xs font-semibold text-slate-500 dark:text-slate-400">Busy</span>
+                        <div className="w-px bg-slate-300 dark:bg-slate-600"></div>
+                        <span className="px-4 py-1 text-xs font-semibold text-slate-500 dark:text-slate-400">Online</span>
+                    </div>
+                </div>
+                <p className="text-xs text-red-500 dark:text-red-400 text-left mt-1.5">Profile or status could not be loaded.</p>
+            </div>
+        );
     }
     
-    if (!optimisticStatus) {
-        return <DisabledStatusToggle message="Status could not be loaded from profile." />;
-    }
-
     const getSubtitle = () => {
         switch (optimisticStatus) {
-            case 'Available':
-                return 'You are ready to take calls';
+            case 'Available': return 'You are ready to take calls';
             case 'Busy':
-            case 'Break':
-                return 'You will not receive new calls';
+            case 'Break': return 'You will not receive new calls';
             case 'Offline':
-            default:
-                return 'Go online to start taking calls';
+            default: return 'Go online to start taking calls';
         }
     };
     
@@ -175,38 +159,36 @@ const StatusToggle: React.FC = () => {
         { label: 'Busy', value: 'Busy' },
         { label: 'Online', value: 'Available' },
     ];
-
+    
     return (
-        <div className="bg-white dark:bg-slate-800 p-3 rounded-xl shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="flex-grow text-center sm:text-left">
-                <h3 className="font-bold text-base text-slate-800 dark:text-slate-200 flex items-center justify-center sm:justify-start">
+        <div className="bg-white dark:bg-slate-800 p-2 rounded-xl shadow-sm">
+            <div className="flex items-center justify-between gap-4">
+                <h3 className="font-semibold text-sm text-slate-800 dark:text-slate-200">
                     Active Status
-                    <span className="ml-1.5 text-slate-400 cursor-help" title="Set your status to control incoming calls.">
-                       <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd"></path></svg>
-                    </span>
                 </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400">{getSubtitle()}</p>
+                
+                <div className="inline-flex items-stretch rounded-full border border-slate-300 dark:border-slate-600">
+                    {statuses.map((status, index) => (
+                        <React.Fragment key={status.value}>
+                            <button
+                                onClick={() => handleStatusChange(status.value)}
+                                className={`px-4 py-1 text-xs font-semibold transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 first:rounded-l-full last:rounded-r-full ${
+                                    currentUiStatus === status.value
+                                        ? (status.value === 'Available' ? 'bg-green-500 text-white' : (status.value === 'Busy' ? 'bg-orange-500 text-white' : 'bg-slate-500 text-white'))
+                                        : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
+                                }`}
+                                aria-pressed={currentUiStatus === status.value}
+                            >
+                                {status.label}
+                            </button>
+                            {index < statuses.length - 1 && (
+                                <div className="w-px bg-slate-300 dark:bg-slate-600"></div>
+                            )}
+                        </React.Fragment>
+                    ))}
+                </div>
             </div>
-            
-            <div className="inline-flex items-stretch rounded-full border border-slate-300 dark:border-slate-600 p-1 flex-shrink-0">
-                {statuses.map((status, index) => (
-                    <React.Fragment key={status.value}>
-                        <button
-                            onClick={() => handleStatusChange(status.value)}
-                            className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 dark:ring-offset-slate-800 focus-visible:ring-cyan-500 ${
-                                currentUiStatus === status.value
-                                    ? (status.value === 'Available' ? 'bg-green-500 text-white shadow-md' : 'text-slate-800 dark:text-slate-100')
-                                    : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'
-                            }`}
-                        >
-                            {status.label}
-                        </button>
-                        {index < statuses.length - 1 && (
-                            <div className="w-px bg-slate-300 dark:bg-slate-600"></div>
-                        )}
-                    </React.Fragment>
-                ))}
-            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400 text-left mt-1.5">{getSubtitle()}</p>
         </div>
     );
 };
@@ -326,11 +308,11 @@ const DashboardScreen: React.FC = () => {
     }, [allActivities]);
 
     return (
-        <div className="p-4 space-y-6">
+        <div className="p-4 space-y-4">
             <InstallPWAButton />
             <StatusToggle />
             
-            <hr className="my-6 border-slate-200 dark:border-slate-700" />
+            <hr className="my-4 border-slate-200 dark:border-slate-700" />
             
             {/* Today's Summary */}
             <div>
@@ -343,7 +325,7 @@ const DashboardScreen: React.FC = () => {
                 </div>
             </div>
 
-            <hr className="my-6 border-slate-200 dark:border-slate-700" />
+            <hr className="my-4 border-slate-200 dark:border-slate-700" />
 
             {/* This Week's Performance */}
              <div>
@@ -356,7 +338,7 @@ const DashboardScreen: React.FC = () => {
                 </div>
             </div>
 
-            <hr className="my-6 border-slate-200 dark:border-slate-700" />
+            <hr className="my-4 border-slate-200 dark:border-slate-700" />
 
             {/* Recent Activity */}
             <div>

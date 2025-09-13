@@ -16,8 +16,8 @@ const MoonIcon: React.FC<{className?: string}> = ({className}) => (
 );
 
 const BellIcon: React.FC<{className?: string}> = ({className}) => (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
-        <path fillRule="evenodd" d="M11.25 4.5A6.75 6.75 0 004.5 11.25v3.161c0 .363-.035.723-.105 1.079a.75.75 0 00.808.808c.356-.07.716-.105 1.079-.105h9.332c.363 0 .723.035 1.079.105a.75.75 0 00.808-.808c-.07-.356-.105-.716-.105-1.079v-3.161A6.75 6.75 0 0012.75 4.5h-1.5zM12 21a.75.75 0 01-.75-.75v-.01a1.5 1.5 0 013 0v.01a.75.75 0 01-.75.75H12z" clipRule="evenodd" />
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className={className}>
+      <path d="M10 2a6 6 0 00-6 6v3.586l-1.293 1.293a1 1 0 00.707 1.707h13.172a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zM10 18a3 3 0 01-3-3h6a3 3 0 01-3 3z" />
     </svg>
 );
 
@@ -41,24 +41,34 @@ const Header: React.FC = () => {
     }, [profile?.uid]);
     
     return (
-        <header className="fixed top-0 left-0 right-0 h-16 bg-gradient-to-r from-cyan-600 to-teal-500 dark:from-slate-900 dark:to-slate-800 shadow-md text-white z-50 flex items-center justify-between px-4">
-            <h1 className="text-xl font-bold tracking-tight">SakoonApp Admin</h1>
+        <header className="fixed top-0 left-0 right-0 h-14 bg-gradient-to-r from-white to-primary-50 dark:from-deep-slate dark:to-cyan-950/40 shadow-md z-50 flex items-center justify-between px-4">
+            <div className="text-2xl font-bold tracking-tight">
+                <span className="bg-gradient-to-r from-cyan-600 to-teal-500 bg-clip-text text-transparent dark:from-cyan-400 dark:to-teal-300">
+                    Sakoon
+                </span>
+                <span className="text-indigo-500 dark:text-indigo-300">
+                    App
+                </span>
+            </div>
             
             <div className="flex items-center gap-2 sm:gap-4">
                 <div className="relative">
                     <button
-                        className="w-10 h-10 flex items-center justify-center rounded-full text-teal-100 hover:text-white hover:bg-white/10 dark:hover:bg-white/10 transition-colors relative"
+                        className="w-10 h-10 flex items-center justify-center rounded-full text-slate-600 dark:text-cyan-200 hover:bg-slate-200/50 dark:hover:bg-white/10 transition-colors relative"
                         aria-label="Notifications"
                     >
                         <BellIcon className="w-6 h-6" />
                         {unreadCount > 0 && (
-                            <span className="absolute top-1.5 right-1.5 block w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-current"></span>
+                           <span className="absolute top-2 right-2 flex h-3 w-3">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+                            </span>
                         )}
                     </button>
                 </div>
                 <button
                     onClick={() => setIsDarkMode(!isDarkMode)}
-                    className="w-10 h-10 flex items-center justify-center rounded-full text-teal-100 hover:text-white hover:bg-white/10 dark:hover:bg-white/10 transition-colors"
+                    className="w-10 h-10 flex items-center justify-center rounded-full text-slate-600 dark:text-cyan-200 hover:bg-slate-200/50 dark:hover:bg-white/10 transition-colors"
                     aria-label="Toggle dark mode"
                 >
                     {isDarkMode ? <SunIcon className="w-6 h-6" /> : <MoonIcon className="w-6 h-6" />}

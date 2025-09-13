@@ -1,6 +1,6 @@
 import React from 'react';
-// FIX: Use named imports for react-router-dom v6 components.
-import { NavLink } from 'react-router-dom';
+// FIX: Upgraded react-router-dom from v5 to v6 syntax. Replaced useRouteMatch with useResolvedPath and useMatch for v6 compatibility.
+import { Link, useResolvedPath, useMatch } from 'react-router-dom';
 
 const navItems = [
   { path: '/dashboard', label: 'Dashboard', icon: (active: boolean) => <IconDashboard active={active} /> },
@@ -10,29 +10,38 @@ const navItems = [
   { path: '/profile', label: 'Profile', icon: (active: boolean) => <IconProfile active={active} /> },
 ];
 
+const NavItem: React.FC<{ path: string; label: string; icon: (active: boolean) => React.ReactNode; }> = ({ path, label, icon }) => {
+    const resolved = useResolvedPath(path);
+    const match = useMatch({ path: resolved.pathname, end: true });
+    const isActive = !!match;
+
+    const textColor = isActive 
+        ? 'text-slate-800 dark:text-emerald-200' 
+        : 'text-slate-500 dark:text-slate-400';
+    
+    const labelStyle = isActive 
+        ? 'text-sm font-bold' 
+        : 'text-xs';
+
+    return (
+        <Link to={path} className="flex-1 flex flex-col justify-center items-center h-full focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 rounded-lg group">
+            <div className={`relative px-4 py-1 rounded-full transition-colors duration-300 ${isActive ? 'bg-emerald-100 dark:bg-emerald-500/20' : 'bg-transparent'}`}>
+                <div className={`transition-transform duration-200 ease-in-out ${isActive ? '-translate-y-0.5' : ''} ${textColor} group-hover:text-slate-800 dark:group-hover:text-slate-200`}>
+                     {icon(isActive)}
+                </div>
+            </div>
+            <span className={`transition-all duration-200 ${labelStyle} ${textColor} group-hover:text-slate-800 dark:group-hover:text-slate-200`}>{label}</span>
+        </Link>
+    );
+};
+
 
 const BottomNav: React.FC = () => {
-  const baseClasses = "relative flex flex-col items-center justify-center w-full h-full transition-colors duration-300 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-white/50";
-  const inactiveClasses = "text-cyan-200 hover:text-white";
-  const activeClasses = "text-white";
-  
   return (
-    <nav className="fixed bottom-0 left-0 right-0 h-16 bg-gradient-to-r from-cyan-600 to-teal-500 dark:from-slate-900 dark:to-slate-800 shadow-[0_-2px_15px_-5px_rgba(0,0,0,0.2)] border-t border-black/10 dark:border-white/10 z-50">
+    <nav className="fixed bottom-0 left-0 right-0 h-16 bg-gradient-to-r from-white to-primary-50 dark:from-deep-slate dark:to-cyan-950/40 shadow-[0_-2px_15px_-5px_rgba(0,0,0,0.2)] border-t border-slate-200/80 dark:border-white/10 z-50">
       <div className="flex justify-around h-full">
-        {navItems.map(({ path, label, icon }) => (
-            <NavLink
-              key={path}
-              to={path}
-              className={({ isActive }) => `${baseClasses} ${isActive ? activeClasses : inactiveClasses}`}
-            >
-              {({ isActive }) => (
-                <>
-                  {isActive && <div className="absolute top-0 h-1 w-8 bg-white rounded-b-full"></div>}
-                  {icon(isActive)}
-                  <span className={`text-xs mt-0.5 font-medium ${isActive ? 'font-bold' : ''}`}>{label}</span>
-                </>
-              )}
-            </NavLink>
+        {navItems.map((item) => (
+            <NavItem key={item.path} {...item} />
         ))}
       </div>
     </nav>

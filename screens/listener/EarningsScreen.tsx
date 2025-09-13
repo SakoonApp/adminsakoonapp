@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { useListener } from '../context/ListenerContext';
-import { db } from '../utils/firebase';
-import type { EarningRecord } from '../types';
+import { useListener } from '../../context/ListenerContext';
+import { db } from '../../utils/firebase';
+import type { EarningRecord } from '../../types';
 
 // --- Icons ---
 const TotalEarningsIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-white/80" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>;
@@ -117,11 +117,6 @@ const EarningsScreen: React.FC = () => {
 
     return (
         <div className="p-4 space-y-6 animate-fade-in">
-            <header>
-                <h1 className="text-3xl font-bold text-slate-800 dark:text-slate-200">Earnings</h1>
-                <p className="text-slate-500 dark:text-slate-400">Your income overview and transaction history.</p>
-            </header>
-
             {/* Total Earnings Card */}
             <div className="bg-gradient-to-br from-cyan-600 to-teal-500 text-white p-6 rounded-2xl shadow-lg flex items-center justify-between">
                 <div>

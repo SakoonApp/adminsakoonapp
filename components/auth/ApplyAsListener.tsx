@@ -1,6 +1,7 @@
 
+
 import React, { useState, useEffect, useRef } from 'react';
-import { db, serverTimestamp } from '../../utils/firebase';
+import { db, serverTimestamp, functions } from '../../utils/firebase';
 
 // Icon for privacy note
 const LockIcon: React.FC<{ className?: string }> = ({ className }) => (
@@ -54,7 +55,6 @@ const ApplyAsListener: React.FC = () => {
   const [error, setError] = useState('');
   const [languageDropdownOpen, setLanguageDropdownOpen] = useState(false);
   const languageDropdownRef = useRef<HTMLDivElement>(null);
-  const formRef = useRef<HTMLFormElement>(null);
 
 
   useEffect(() => {
@@ -68,22 +68,6 @@ const ApplyAsListener: React.FC = () => {
         document.removeEventListener("mousedown", handleClickOutside);
     };
   }, []);
-
-  useEffect(() => {
-    const handleClickOutsideForm = (event: MouseEvent) => {
-        const applyButton = document.getElementById('apply-now-button');
-        if (applyButton && applyButton.contains(event.target as Node)) {
-            return;
-        }
-        if (showForm && formRef.current && !formRef.current.contains(event.target as Node)) {
-            setShowForm(false);
-        }
-    };
-    document.addEventListener('mousedown', handleClickOutsideForm);
-    return () => {
-        document.removeEventListener('mousedown', handleClickOutsideForm);
-    };
-  }, [showForm]);
 
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -102,60 +86,59 @@ const ApplyAsListener: React.FC = () => {
         }
     });
   };
-  
-  const handleNext = () => {
-    // Step 1 Validation
-    if (!formData.fullName.trim()) {
-        setError("कृपया अपना पूरा नाम दर्ज करें।");
-        return;
-    }
-    if (!formData.displayName.trim()) {
-        setError("कृपया प्रदर्शित नाम दर्ज करें।");
-        return;
-    }
-    if (!/^\d{10}$/.test(formData.phone.trim())) {
-        setError("कृपया एक मान्य 10-अंकीय मोबाइल नंबर दर्ज करें।");
-        return;
-    }
-     if (!formData.profession) {
-        setError("कृपया अपना पेशा चुनें।");
-        return;
-    }
-    setError('');
-    setStep(2);
-  };
-
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Step 2 Validation
-    if (formData.languages.length === 0) {
-        setError("कृपया कम से कम एक भाषा चुनें।");
-        return;
-    }
-    const hasBankDetails = formData.bankAccount.trim() && formData.ifsc.trim() && formData.bankName.trim();
-    const hasUpi = formData.upiId.trim();
-    if (!hasBankDetails && !hasUpi) {
-        setError("कृपया भुगतान के लिए बैंक विवरण या UPI ID प्रदान करें।");
+
+    if (step === 1) {
+        // Step 1 Validation
+        if (!formData.fullName.trim()) {
+            setError("कृपया अपना पूरा नाम दर्ज करें।");
+            return;
+        }
+        if (!formData.displayName.trim()) {
+            setError("कृपया प्रदर्शित नाम दर्ज करें।");
+            return;
+        }
+        if (!/^\d{10}$/.test(formData.phone.trim())) {
+            setError("कृपया एक मान्य 10-अंकीय मोबाइल नंबर दर्ज करें।");
+            return;
+        }
+         if (!formData.profession) {
+            setError("कृपया अपना पेशा चुनें।");
+            return;
+        }
+        setError('');
+        setStep(2);
         return;
     }
 
-    setLoading(true);
-    setError('');
+    if (step === 2) {
+        // Step 2 Validation
+        if (formData.languages.length === 0) {
+            setError("कृपया कम से कम एक भाषा चुनें।");
+            return;
+        }
+        const hasBankDetails = formData.bankAccount.trim() && formData.ifsc.trim() && formData.bankName.trim();
+        const hasUpi = formData.upiId.trim();
+        if (!hasBankDetails && !hasUpi) {
+            setError("कृपया भुगतान के लिए बैंक विवरण या UPI ID प्रदान करें।");
+            return;
+        }
 
-    try {
-      await db.collection('applications').add({
-        ...formData,
-        status: 'pending',
-        createdAt: serverTimestamp(),
-      });
-      setApplied(true);
-    } catch (err) {
-      console.error("Application submission error:", err);
-      setError("आवेदन जमा करने में विफल। कृपया पुन: प्रयास करें।");
-    } finally {
-      setLoading(false);
+        setLoading(true);
+        setError('');
+
+        try {
+          const submitListenerApplication = functions.httpsCallable('submitListenerApplication');
+          await submitListenerApplication(formData);
+          setApplied(true);
+        } catch (err: any) {
+          console.error("Application submission error:", err);
+          setError(err.message || "आवेदन जमा करने में विफल। कृपया अपनी इंटरनेट जाँच करें और पुनः प्रयास करें।");
+        } finally {
+          setLoading(false);
+        }
     }
   };
 
@@ -186,12 +169,13 @@ const ApplyAsListener: React.FC = () => {
 
 
   return (
-    <form ref={formRef} onSubmit={handleSubmit} className="space-y-6 bg-slate-900/50 p-4 -m-4 rounded-lg">
-      <div className="text-center">
-          <p className="font-bold text-lg text-slate-300">Step {step} of 2</p>
-          <div className="w-full bg-slate-700 rounded-full h-2.5 mt-1">
-              <div className="bg-cyan-600 h-2.5 rounded-full transition-all duration-500" style={{ width: `${step === 1 ? '50%' : '100%'}` }}></div>
-          </div>
+    <form onSubmit={handleSubmit} className="space-y-6 bg-slate-900/50 p-4 -m-4 rounded-lg">
+       <div className="flex justify-between items-center">
+            <p className="font-bold text-lg text-slate-300">Step {step} of 2</p>
+            <button type="button" onClick={() => setShowForm(false)} className="text-2xl text-slate-400 hover:text-white">&times;</button>
+       </div>
+      <div className="w-full bg-slate-700 rounded-full h-2.5">
+          <div className="bg-cyan-600 h-2.5 rounded-full transition-all duration-500" style={{ width: `${step === 1 ? '50%' : '100%'}` }}></div>
       </div>
 
       {/* Warning Note */}
@@ -370,23 +354,13 @@ const ApplyAsListener: React.FC = () => {
             </button>
         )}
         
-        {step === 1 ? (
-            <button
-                type="button"
-                onClick={handleNext}
-                className="w-full bg-cyan-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-cyan-700 transition-colors shadow-lg col-span-2"
-            >
-                Next
-            </button>
-        ) : (
-            <button
-                type="submit"
-                disabled={loading}
-                className="w-full bg-cyan-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-cyan-700 transition-colors shadow-lg disabled:bg-slate-400 disabled:cursor-not-allowed"
-            >
-                {loading ? 'जमा हो रहा है...' : 'आवेदन भेजें'}
-            </button>
-        )}
+        <button
+            type="submit"
+            disabled={loading}
+            className={`w-full bg-cyan-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-cyan-700 transition-colors shadow-lg disabled:bg-slate-400 disabled:cursor-not-allowed ${step === 1 ? 'col-span-2' : ''}`}
+        >
+            {step === 1 ? 'Next' : (loading ? 'जमा हो रहा है...' : 'आवेदन भेजें')}
+        </button>
       </div>
     </form>
   );

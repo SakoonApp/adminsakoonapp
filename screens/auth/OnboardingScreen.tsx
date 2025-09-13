@@ -1,14 +1,15 @@
 
+
+
 import React, { useState, useEffect } from 'react';
-// FIX: Upgraded from useHistory (v5) to useNavigate (v6).
 import { useNavigate } from 'react-router-dom';
 import firebase from 'firebase/compat/app';
-import { db } from '../utils/firebase';
-import type { ListenerProfile } from '../types';
+import { db } from '../../utils/firebase';
+import type { ListenerProfile } from '../../types';
 
-import OnboardingStepOne from '../components/onboarding/OnboardingStepOne';
-import OnboardingStepTwo from '../components/onboarding/OnboardingStepTwo';
-import StepProgress from '../components/onboarding/StepProgress';
+import OnboardingStepOne from '../../components/onboarding/OnboardingStepOne';
+import OnboardingStepTwo from '../../components/onboarding/OnboardingStepTwo';
+import StepProgress from '../../components/onboarding/StepProgress';
 
 interface OnboardingScreenProps {
   user: firebase.User;
@@ -22,7 +23,6 @@ export interface OnboardingData {
 }
 
 const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ user }) => {
-  // FIX: Upgraded from useHistory (v5) to useNavigate (v6).
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const [listenerData, setListenerData] = useState<ListenerProfile | null>(null);
@@ -77,7 +77,6 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ user }) => {
       // Since the status change is now automatic on the backend, we can optimistically redirect.
       // The App.tsx router will pick up the 'active' status on the next load.
       // For a brief moment, they might see the pending screen if redirection is faster than the backend trigger.
-      // FIX: Upgraded from history.replace (v5) to navigate (v6).
       navigate('/pending-approval', { replace: true });
 
     } catch (err) {

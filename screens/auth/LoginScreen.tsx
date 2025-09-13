@@ -1,12 +1,13 @@
 
 
 
+
 // FIX: Corrected the import statement for React hooks.
 import React, { useState, useEffect, useRef } from 'react';
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
-import { auth } from '../utils/firebase';
-import ApplyAsListener from '../components/auth/ApplyAsListener';
+import { auth } from '../../utils/firebase';
+import ApplyAsListener from '../../components/auth/ApplyAsListener';
 
 // --- Icon Components ---
 const LockIcon: React.FC<{className?: string}> = ({className}) => (
