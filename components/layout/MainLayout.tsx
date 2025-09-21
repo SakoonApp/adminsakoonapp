@@ -1,6 +1,6 @@
 import React, { useRef } from 'react';
-// FIX: Upgraded react-router-dom from v5 to v6 syntax.
-import { useLocation, useNavigate } from 'react-router-dom';
+// FIX: Changed import from 'react-router-dom' to 'react-router' to resolve module export errors for hooks.
+import { useLocation, useNavigate } from 'react-router';
 import BottomNav from './BottomNav';
 import IncomingCallManager from '../calls/IncomingCallManager';
 import Header from '../common/Header';
@@ -15,71 +15,61 @@ const swipeablePaths = [
 ];
 
 const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // FIX: Upgraded from useHistory (v5) to useNavigate (v6).
   const navigate = useNavigate();
   const location = useLocation();
   const touchStartX = useRef(0);
-  const touchEndX = useRef(0);
-  const swipeHandled = useRef(false);
+  const touchStartY = useRef(0);
 
-  const MIN_SWIPE_DISTANCE = 60; // Minimum distance in pixels for a swipe to be registered
+  const MIN_SWIPE_DISTANCE = 50; // Minimum horizontal distance for a swipe.
 
   const handleTouchStart = (e: React.TouchEvent) => {
-    // Don't interfere with vertical scrolling if it's the primary gesture
-    if (e.currentTarget.scrollHeight > e.currentTarget.clientHeight) {
-        // Content is scrollable, be more careful
-    }
+    // Record the starting coordinates of the touch.
     touchStartX.current = e.targetTouches[0].clientX;
-    touchEndX.current = e.targetTouches[0].clientX;
-    swipeHandled.current = false;
+    touchStartY.current = e.targetTouches[0].clientY;
   };
 
-  const handleTouchMove = (e: React.TouchEvent) => {
-    touchEndX.current = e.targetTouches[0].clientX;
-  };
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    // Get the final coordinates when the touch ends.
+    const touchEndX = e.changedTouches[0].clientX;
+    const touchEndY = e.changedTouches[0].clientY;
 
-  const handleTouchEnd = () => {
-    if (swipeHandled.current) return;
+    const deltaX = touchEndX - touchStartX.current;
+    const deltaY = touchEndY - touchStartY.current;
 
-    const currentPath = location.pathname;
-    const currentIndex = swipeablePaths.indexOf(currentPath);
-    
-    // Only handle swipes on the main swipeable screens
-    if (currentIndex === -1) {
+    // First, determine if the gesture was primarily horizontal or vertical.
+    // If vertical movement is greater than horizontal, it's a scroll, so we do nothing.
+    if (Math.abs(deltaX) <= Math.abs(deltaY)) {
       return;
     }
 
-    const distance = touchStartX.current - touchEndX.current;
-    const isLeftSwipe = distance > MIN_SWIPE_DISTANCE;
-    const isRightSwipe = distance < -MIN_SWIPE_DISTANCE;
-
-    if (isLeftSwipe) {
-      // Swiped left, go to the next screen
-      if (currentIndex < swipeablePaths.length - 1) {
-        navigate(swipeablePaths[currentIndex + 1]);
-        swipeHandled.current = true;
-      }
-    } else if (isRightSwipe) {
-      // Swiped right, go to the previous screen
-      if (currentIndex > 0) {
-        navigate(swipeablePaths[currentIndex - 1]);
-        swipeHandled.current = true;
+    // If the gesture was horizontal, check if it was long enough to be a swipe.
+    if (Math.abs(deltaX) > MIN_SWIPE_DISTANCE) {
+      const currentPath = location.pathname;
+      const currentIndex = swipeablePaths.indexOf(currentPath);
+      
+      if (currentIndex === -1) return; // Not a swipeable page
+      
+      if (deltaX < 0) { // Swiped left
+        if (currentIndex < swipeablePaths.length - 1) {
+          navigate(swipeablePaths[currentIndex + 1]);
+        }
+      } else { // Swiped right
+        if (currentIndex > 0) {
+          navigate(swipeablePaths[currentIndex - 1]);
+        }
       }
     }
   };
 
   return (
-    <div className="flex flex-col h-screen bg-slate-50 dark:bg-slate-950 overflow-hidden">
+    <div className="flex flex-col min-h-screen bg-slate-50 dark:bg-slate-950">
       <Header />
       <main 
-        className="flex-grow pt-14 pb-16 overflow-y-auto"
+        className="flex-grow pt-14 pb-16 bg-slate-50 dark:bg-slate-950"
         onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
-        <div className="bg-slate-50 dark:bg-slate-950 h-full w-full">
-            {children}
-        </div>
+        {children}
       </main>
       <BottomNav />
       <IncomingCallManager />

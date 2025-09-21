@@ -1,4 +1,4 @@
-import React, { memo } from 'react';
+import React from 'react';
 import type { CallRecord } from '../../types';
 
 interface CallHistoryCardProps {
@@ -90,4 +90,4 @@ const CallHistoryCard: React.FC<CallHistoryCardProps> = ({ call }) => {
     );
 };
 
-export default memo(CallHistoryCard);
+export default CallHistoryCard;

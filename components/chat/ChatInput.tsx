@@ -1,6 +1,7 @@
-import React, { useState, useRef, useEffect, memo } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { FORBIDDEN_CONTENT_PATTERN } from '../../utils/chatSecurity';
 import type { ChatMessage } from '../../types';
+import { useNotification } from '../../context/NotificationContext';
 
 // --- Icons ---
 const SendIcon: React.FC<{ className?: string }> = ({ className }) => (
@@ -34,6 +35,7 @@ const ChatInput: React.FC<ChatInputProps> = ({ onSendText, onSendAudio, recentMe
     const [isRecording, setIsRecording] = useState(false);
     const [recordingTime, setRecordingTime] = useState(0);
     const [validationError, setValidationError] = useState<string | null>(null);
+    const { showNotification } = useNotification();
     
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const recordingTimerRef = useRef<number | null>(null);
@@ -137,7 +139,7 @@ const ChatInput: React.FC<ChatInputProps> = ({ onSendText, onSendAudio, recentMe
 
         } catch (error) {
             console.error("Microphone access denied:", error);
-            alert("Microphone access is required to send voice messages.");
+            showNotification("Microphone access is required to send voice messages.", "error");
         }
     };
 
@@ -204,4 +206,4 @@ const ChatInput: React.FC<ChatInputProps> = ({ onSendText, onSendAudio, recentMe
     );
 };
 
-export default memo(ChatInput);
+export default ChatInput;

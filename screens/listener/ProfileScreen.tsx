@@ -1,11 +1,28 @@
-import React, { useState, useEffect, useRef, memo, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { auth, db } from '../../utils/firebase';
-// FIX: Upgraded from useHistory (v5) to useNavigate (v6).
-import { useNavigate } from 'react-router-dom';
+// FIX: Changed import from 'react-router-dom' to 'react-router' to resolve module export errors for hooks.
+import { useNavigate } from 'react-router';
 import { GuidelinesContent } from '../../components/profile/ListenerGuidelines';
 import { useListener } from '../../context/ListenerContext';
 import { TermsContent } from './TermsScreen';
 import { PrivacyPolicyContent } from './PrivacyPolicyScreen';
+
+// --- Reusable Notification Banner ---
+const NotificationBanner: React.FC<{ message: string; type: 'error' | 'success'; onDismiss: () => void; }> = ({ message, type, onDismiss }) => {
+    const baseClasses = "p-4 mb-3 rounded-lg flex items-center justify-between shadow-md animate-fade-in";
+    const colorClasses = type === 'error'
+        ? "bg-red-100 dark:bg-red-900/50 text-red-800 dark:text-red-200"
+        : "bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-200";
+
+    return (
+        <div className={`${baseClasses} ${colorClasses}`} role="alert">
+            <p className="font-medium">{message}</p>
+            <button onClick={onDismiss} aria-label="Dismiss" className="p-1 -mr-2 rounded-full hover:bg-black/10 transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
+            </button>
+        </div>
+    );
+};
 
 
 // --- Reusable Accordion Component ---
@@ -15,7 +32,7 @@ const ChevronDownIcon: React.FC<{ isOpen: boolean; className?: string }> = ({ is
     </svg>
 );
 
-const Accordion: React.FC<{ title: string; children: React.ReactNode; isOpen: boolean; onToggle: () => void; }> = memo(({ title, children, isOpen, onToggle }) => {
+const Accordion: React.FC<{ title: string; children: React.ReactNode; isOpen: boolean; onToggle: () => void; }> = ({ title, children, isOpen, onToggle }) => {
     return (
         <div className="bg-white dark:bg-gradient-to-br dark:from-slate-800 dark:to-slate-700/90 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
             <button
@@ -33,12 +50,13 @@ const Accordion: React.FC<{ title: string; children: React.ReactNode; isOpen: bo
             </div>
         </div>
     );
-});
+};
 
 
-const ToggleSwitch: React.FC<{ checked: boolean; onChange: (checked: boolean) => void; disabled?: boolean; }> = memo(({ checked, onChange, disabled }) => (
+const ToggleSwitch: React.FC<{ checked: boolean; onChange: (checked: boolean) => void; disabled?: boolean; }> = ({ checked, onChange, disabled }) => (
     <button
         type="button"
+        role="switch"
         disabled={disabled}
         onClick={() => onChange(!checked)}
         className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500 ${checked ? 'bg-cyan-600' : 'bg-slate-400 dark:bg-slate-600'} ${disabled ? 'cursor-not-allowed opacity-50' : ''}`}
@@ -48,7 +66,7 @@ const ToggleSwitch: React.FC<{ checked: boolean; onChange: (checked: boolean) =>
             className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform duration-300 ease-in-out ${checked ? 'translate-x-6' : 'translate-x-1'}`}
         />
     </button>
-));
+);
 
 const WhatsAppIcon: React.FC<{className?: string}> = ({className}) => (
     <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24">
@@ -69,14 +87,14 @@ const EarningStructureContent: React.FC = () => (
             <li><strong>31 से 45 मिनट की कॉल पर:</strong> ₹3.5 प्रति मिनट</li>
             <li><strong>45 मिनट से ज़्यादा की कॉल पर:</strong> ₹3.6 प्रति मिनट</li>
         </ul>
-        <p className="mt-2 text-xs italic bg-slate-100 dark:bg-slate-700/50 p-2 rounded-md"><strong>उदाहरण:</strong> अगर आप 20 मिनट की कॉल पूरी करते हैं, तो आपकी कमाई होगी: 20 मिनट x ₹3.0/मिनट = ₹60</p>
+        <p><em>उदाहरण: अगर आप 20 मिनट की कॉल पूरी करते हैं, तो आपकी कमाई होगी: 20 मिनट x ₹3.0/मिनट = ₹60</em></p>
 
-        <h4 className="mt-4">B) चैट मैसेज के लिए (फिक्स्ड रेट):</h4>
+        <h4>B) चैट मैसेज के लिए (फिक्स्ड रेट):</h4>
         <p>आपको हर भेजे गए मैसेज के लिए एक फिक्स्ड रेट मिलता है।</p>
         <ul>
             <li><strong>हर मैसेज पर कमाई:</strong> ₹0.50 प्रति मैसेज</li>
         </ul>
-         <p className="mt-2 text-xs italic bg-slate-100 dark:bg-slate-700/50 p-2 rounded-md"><strong>उदाहरण:</strong> अगर आप 25 मैसेज का जवाब देते हैं, तो आपकी कमाई होगी: 25 मैसेज x ₹0.50/मैसेज = ₹12.50</p>
+         <p><em>उदाहरण: अगर आप 25 मैसेज का जवाब देते हैं, तो आपकी कमाई होगी: 25 मैसेज x ₹0.50/मैसेज = ₹12.50</em></p>
     </>
 );
 
@@ -86,6 +104,7 @@ const ProfileScreen: React.FC = () => {
     const { profile, loading } = useListener();
     const isInitialLoad = useRef(true);
     const [openAccordion, setOpenAccordion] = useState<string | null>(null);
+    const [notification, setNotification] = useState<{message: string, type: 'error' | 'success'} | null>(null);
 
     const [localSettings, setLocalSettings] = useState({
         calls: true,
@@ -102,20 +121,20 @@ const ProfileScreen: React.FC = () => {
         }
     }, [profile]);
 
-    const handleAccordionToggle = useCallback((accordionKey: string) => {
+    const handleAccordionToggle = (accordionKey: string) => {
         setOpenAccordion(prev => (prev === accordionKey ? null : accordionKey));
-    }, []);
+    };
 
-    const handleLogout = useCallback(async () => {
+    const handleLogout = async () => {
         try {
             await auth.signOut();
             navigate('/login');
         } catch (error) {
             console.error('Error signing out: ', error);
         }
-    }, [navigate]);
+    };
     
-    const handleSettingsChange = useCallback(async (key: 'calls' | 'messages', value: boolean) => {
+    const handleSettingsChange = async (key: 'calls' | 'messages', value: boolean) => {
         if (!profile?.uid) return;
         setLocalSettings(prev => ({ ...prev, [key]: value }));
         try {
@@ -123,16 +142,18 @@ const ProfileScreen: React.FC = () => {
             await listenerRef.update({
                 [`notificationSettings.${key}`]: value
             });
+            setNotification({ message: 'Settings saved successfully!', type: 'success'});
         } catch (error) {
             console.error(`Failed to update ${key} notification setting:`, error);
-            setLocalSettings(prev => ({ ...prev, [key]: !value }));
-            alert(`Could not save setting for ${key}. Please try again.`);
+            setLocalSettings(prev => ({ ...prev, [key]: !value })); // Revert on error
+            setNotification({ message: `Could not save setting for ${key}. Please try again.`, type: 'error'});
         }
-    }, [profile]);
+    };
 
 
   return (
     <div className="p-4 space-y-3">
+        {notification && <NotificationBanner message={notification.message} type={notification.type} onDismiss={() => setNotification(null)} />}
         <div className="bg-white dark:bg-gradient-to-br dark:from-slate-800 dark:to-slate-700/90 p-4 rounded-xl shadow-sm">
           <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-4">
@@ -182,15 +203,15 @@ const ProfileScreen: React.FC = () => {
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-slate-400" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" /></svg>
             </a>
         </div>
-        
+
         <Accordion 
-            title="आपकी कमाई कैसे होती है?"
+            title="कमाई कैसे होगी? (How You Earn)"
             isOpen={openAccordion === 'earning'}
             onToggle={() => handleAccordionToggle('earning')}
         >
             <EarningStructureContent />
         </Accordion>
-
+        
         <Accordion 
             title="Listener Guidelines & FAQ"
             isOpen={openAccordion === 'guidelines'}

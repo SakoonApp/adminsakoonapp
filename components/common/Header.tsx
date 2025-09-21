@@ -1,4 +1,4 @@
-import React, { useState, useEffect, memo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useListener } from '../../context/ListenerContext';
 import { db } from '../../utils/firebase';
 
@@ -55,7 +55,7 @@ const Header: React.FC = () => {
                 <div className="relative">
                     <button
                         className="w-10 h-10 flex items-center justify-center rounded-full text-slate-600 dark:text-cyan-200 hover:bg-slate-200/50 dark:hover:bg-white/10 transition-colors relative"
-                        aria-label="Notifications"
+                        aria-label="View notifications"
                     >
                         <BellIcon className="w-6 h-6" />
                         {unreadCount > 0 && (
@@ -69,7 +69,7 @@ const Header: React.FC = () => {
                 <button
                     onClick={() => setIsDarkMode(!isDarkMode)}
                     className="w-10 h-10 flex items-center justify-center rounded-full text-slate-600 dark:text-cyan-200 hover:bg-slate-200/50 dark:hover:bg-white/10 transition-colors"
-                    aria-label="Toggle dark mode"
+                    aria-label={isDarkMode ? "Switch to light mode" : "Switch to dark mode"}
                 >
                     {isDarkMode ? <SunIcon className="w-6 h-6" /> : <MoonIcon className="w-6 h-6" />}
                 </button>
@@ -78,4 +78,4 @@ const Header: React.FC = () => {
     );
 };
 
-export default memo(Header);
+export default Header;

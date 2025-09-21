@@ -1,6 +1,10 @@
+
+
+
+
 import React, { useEffect, useRef, useState } from 'react';
-// FIX: Upgraded react-router-dom from v5 to v6 syntax.
-import { useParams, useNavigate } from 'react-router-dom';
+// FIX: Changed import from 'react-router-dom' to 'react-router' to resolve module export errors for hooks.
+import { useParams, useNavigate } from 'react-router';
 import { db } from '../../utils/firebase';
 import { fetchZegoToken } from '../../utils/zego';
 import { useListener } from '../../context/ListenerContext';
@@ -40,16 +44,6 @@ const ActiveCallScreen: React.FC = () => {
                     const token = await fetchZegoToken(callId);
                     const zp = window.ZegoUIKitPrebuilt.create(token);
                     
-                    // Enhance audio quality by enabling noise suppression and echo cancellation.
-                    const zegoExpressEngine = zp.getExpressEngine();
-                    if (zegoExpressEngine) {
-                        // Enable Acoustic Echo Cancellation to prevent the caller's voice from being played back.
-                        zegoExpressEngine.enableAEC(true);
-                        // Enable Automatic Noise Suppression to filter out background noise.
-                        // 'MEDIUM' provides a good balance between noise reduction and audio clarity.
-                        zegoExpressEngine.enableANS(true, 'MEDIUM');
-                    }
-
                     zp.joinRoom({
                         container: callContainerRef.current,
                         sharedLinks: [

@@ -1,9 +1,7 @@
-
 // FIX: Corrected the import statement for React hooks.
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
-// FIX: Corrected relative import paths
 import { auth } from '../../utils/firebase';
 import ApplyAsListener from '../../components/auth/ApplyAsListener';
 
@@ -49,12 +47,10 @@ const LoginScreen: React.FC = () => {
   
   const [resendTimer, setResendTimer] = useState(30);
   const [canResend, setCanResend] = useState(false);
-  const recaptchaVerifierRef = useRef<firebase.auth.RecaptchaVerifier | null>(null);
 
   useEffect(() => {
-    return () => {
-      recaptchaVerifierRef.current?.clear();
-    };
+    // Set auth language to English for reCAPTCHA and other auth UI
+    auth.languageCode = 'en';
   }, []);
 
   useEffect(() => {
@@ -82,49 +78,43 @@ const LoginScreen: React.FC = () => {
   useEffect(() => {
     // FIX: Corrected timer type from NodeJS.Timeout to number for browser environment.
     let messageTimer: number;
-    if (loading && (loadingMessage.startsWith('Sending') || loadingMessage.startsWith('Resending'))) {
-      const messages = [
-        "Initializing secure connection...",
-        "Performing security check...",
-        `Requesting OTP for +91 ${phoneNumber}...`,
-        "Provider is sending the SMS...",
-        "Almost there..."
-      ];
-      let messageIndex = 0;
-      messageTimer = window.setInterval(() => {
-        messageIndex = (messageIndex + 1) % messages.length;
-        setLoadingMessage(messages[messageIndex]);
-      }, 3000);
+    if (loading && (loadingMessage.startsWith('Sending'))) {
+        const messages = [
+            "Initializing secure connection...",
+            "Running security checks...",
+            `Requesting OTP for +91 ${phoneNumber}...`,
+            "Sending SMS...",
+            "Almost there..."
+        ];
+        let messageIndex = 0;
+        const showNextMessage = () => {
+            setLoadingMessage(messages[messageIndex]);
+            messageIndex = (messageIndex + 1) % messages.length;
+        };
+        showNextMessage();
+        messageTimer = window.setInterval(showNextMessage, 3000);
     }
     // FIX: Use clearInterval for timers created with setInterval.
     return () => clearInterval(messageTimer);
   }, [loading, loadingMessage, phoneNumber]);
 
 
-  const setupRecaptcha = () => {
-    recaptchaVerifierRef.current?.clear();
-    const recaptchaContainer = document.getElementById('recaptcha-container');
-    if (!recaptchaContainer) {
-      throw new Error("reCAPTCHA container not found.");
-    }
-    const verifier = new firebase.auth.RecaptchaVerifier(recaptchaContainer, {
-      'size': 'invisible',
-      'callback': () => { /* reCAPTCHA solved */ }
-    });
-    recaptchaVerifierRef.current = verifier;
-    return verifier;
-  };
-
   const sendOtp = async () => {
     setError('');
     if (phoneNumber.length !== 10) {
-      setError('Please enter a valid 10-digit phone number.');
+      setError('Please enter a valid 10-digit mobile number.');
       setLoading(false);
       return;
     }
 
     try {
-      const verifier = setupRecaptcha();
+      // Re-create the verifier each time to ensure it's fresh and avoid state issues.
+      const verifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', {
+        'size': 'invisible',
+        'callback': () => {} // Callback for auto-submission, not needed here.
+      });
+      window.recaptchaVerifier = verifier;
+
       const confirmationResult = await auth.signInWithPhoneNumber(`+91${phoneNumber}`, verifier);
       window.confirmationResult = confirmationResult;
       setStep('otp');
@@ -132,9 +122,15 @@ const LoginScreen: React.FC = () => {
       setCanResend(false);
     } catch (err: any) {
       console.error("Error sending OTP:", err);
-      setError('Failed to send OTP. Please check the number or try again later. If the problem persists, contact support.');
-      // Make sure recaptcha is cleared on failure to allow retry
-      recaptchaVerifierRef.current?.clear();
+      let errorMessage = 'Failed to send OTP. Please check the number or try again later.';
+      if (err.code === 'auth/too-many-requests') {
+        errorMessage = 'Too many requests from this number. Please try again later.';
+      } else if (err.code === 'auth/invalid-phone-number') {
+        errorMessage = 'This is an invalid phone number. Please check again.';
+      } else if (err.message.includes('reCAPTCHA')) {
+        errorMessage = 'Problem with reCAPTCHA verification. Please refresh the page.';
+      }
+      setError(errorMessage);
     } finally {
       setLoading(false);
       setLoadingMessage('');
@@ -155,7 +151,7 @@ const LoginScreen: React.FC = () => {
     setError('');
 
     if (!window.confirmationResult) {
-      setError('Your OTP session has expired. Please go back and request a new OTP.');
+      setError('Your OTP session has expired. Please go back and request a new one.');
       setLoading(false);
       setLoadingMessage('');
       return;
@@ -193,7 +189,7 @@ const LoginScreen: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-start pt-20 p-4 relative overflow-hidden">
+    <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-start pt-20 p-4 relative overflow-y-auto">
       <div id="recaptcha-container"></div>
 
       <div className="absolute inset-0 z-0">
@@ -217,7 +213,7 @@ const LoginScreen: React.FC = () => {
                          type="tel" 
                          value={phoneNumber} 
                          onChange={(e) => setPhoneNumber(e.target.value.replace(/[^0-9]/g, '').slice(0, 10))} 
-                         placeholder="📞 +91  मोबाइल नंबर"
+                         placeholder="📞 +91  Mobile Number"
                          className="w-full bg-white/10 border border-white/20 text-white placeholder-cyan-200/50 text-lg rounded-xl block p-3.5 focus:ring-cyan-400 focus:border-cyan-400 focus:outline-none transition-colors" 
                          required 
                          maxLength={10}
@@ -225,7 +221,7 @@ const LoginScreen: React.FC = () => {
                    </div>
                    <button type="submit" disabled={loading} className="w-full bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-3.5 rounded-xl transition-colors disabled:bg-cyan-800 disabled:cursor-not-allowed flex items-center justify-center">
                        {loading && <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>}
-                       {loading ? loadingMessage : 'OTP पाएं'}
+                       {loading ? loadingMessage : 'Get OTP'}
                    </button>
                </form>
 
@@ -266,7 +262,7 @@ const LoginScreen: React.FC = () => {
                           type="tel"
                           value={otp}
                           onChange={(e) => setOtp(e.target.value.replace(/[^0-9]/g, '').slice(0, 6))}
-                          placeholder="6-Digit OTP"
+                          placeholder="6-digit OTP"
                           className="w-full bg-white/10 border border-white/20 text-white placeholder-cyan-200/50 text-lg rounded-xl tracking-[0.5em] text-center p-3.5 focus:ring-cyan-400 focus:border-cyan-400 focus:outline-none transition-colors"
                           required
                           maxLength={6}

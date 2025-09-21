@@ -1,6 +1,7 @@
-import React, { memo } from 'react';
-// FIX: Upgraded react-router-dom from v5 to v6 syntax.
-import { Link, useMatch, useResolvedPath } from 'react-router-dom';
+import React from 'react';
+// FIX: Split react-router-dom imports to resolve export errors. Core hooks are now imported from 'react-router' and DOM-specific components from 'react-router-dom'.
+import { useResolvedPath, useMatch } from 'react-router';
+import { Link } from 'react-router-dom';
 
 const navItems = [
   { path: '/dashboard', label: 'Dashboard', icon: (active: boolean) => <IconDashboard active={active} /> },
@@ -10,8 +11,7 @@ const navItems = [
   { path: '/profile', label: 'Profile', icon: (active: boolean) => <IconProfile active={active} /> },
 ];
 
-const NavItem: React.FC<{ path: string; label: string; icon: (active: boolean) => React.ReactNode; }> = memo(({ path, label, icon }) => {
-    // FIX: Replaced v5 hook with v6's useResolvedPath and useMatch
+const NavItem: React.FC<{ path: string; label: string; icon: (active: boolean) => React.ReactNode; }> = ({ path, label, icon }) => {
     const resolved = useResolvedPath(path);
     const match = useMatch({ path: resolved.pathname, end: true });
     const isActive = !!match;
@@ -25,7 +25,7 @@ const NavItem: React.FC<{ path: string; label: string; icon: (active: boolean) =
         : 'text-xs';
 
     return (
-        <Link to={path} className="flex-1 flex flex-col justify-center items-center h-full focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 rounded-lg group">
+        <Link to={path} aria-label={label} className="flex-1 flex flex-col justify-center items-center h-full focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 rounded-lg group">
             <div className={`relative px-4 py-1 rounded-full transition-colors duration-300 ${isActive ? 'bg-emerald-100 dark:bg-emerald-500/20' : 'bg-transparent'}`}>
                 <div className={`transition-transform duration-200 ease-in-out ${isActive ? '-translate-y-0.5' : ''} ${textColor} group-hover:text-slate-800 dark:group-hover:text-slate-200`}>
                      {icon(isActive)}
@@ -34,7 +34,7 @@ const NavItem: React.FC<{ path: string; label: string; icon: (active: boolean) =
             <span className={`transition-all duration-200 ${labelStyle} ${textColor} group-hover:text-slate-800 dark:group-hover:text-slate-200`}>{label}</span>
         </Link>
     );
-});
+};
 
 
 const BottomNav: React.FC = () => {
@@ -60,9 +60,7 @@ const IconChat: React.FC<{ active: boolean }> = ({ active }) => (
     <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={active ? 2.5 : 2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
 );
 const IconEarnings: React.FC<{ active: boolean }> = ({ active }) => (
-    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={active ? 2.5 : 2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-    </svg>
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={active ? 2.5 : 2}><path strokeLinecap="round" strokeLinejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
 );
 const IconProfile: React.FC<{ active: boolean }> = ({ active }) => (
     <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={active ? 2.5 : 2}><path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>

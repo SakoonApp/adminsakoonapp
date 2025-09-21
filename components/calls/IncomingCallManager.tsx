@@ -1,7 +1,10 @@
 
+
+
+
 import React, { useEffect } from 'react';
-// FIX: Upgraded react-router-dom from v5 to v6 syntax.
-import { useNavigate, useLocation } from 'react-router-dom';
+// FIX: Changed import from 'react-router-dom' to 'react-router' to resolve module export errors for hooks.
+import { useNavigate, useLocation } from 'react-router';
 import { messaging, db } from '../../utils/firebase';
 import { useListener } from '../../context/ListenerContext';
 import firebase from 'firebase/compat/app';
@@ -97,7 +100,6 @@ const playMessageTone = () => {
 
 const IncomingCallManager: React.FC = () => {
   const { profile } = useListener();
-  // FIX: Upgraded from useHistory (v5) to useNavigate (v6).
   const navigate = useNavigate();
   const location = useLocation();
 

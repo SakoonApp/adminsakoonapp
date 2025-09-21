@@ -1,48 +1,98 @@
-import React, { createContext, useState, useEffect, useContext, ReactNode } from 'react';
-import { db } from './../utils/firebase';
-import { ListenerProfile } from './../types';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import firebase from 'firebase/compat/app';
+import { db, rtdb } from '../utils/firebase';
+import type { ListenerProfile } from '../types';
 
 interface ListenerContextType {
   profile: ListenerProfile | null;
   loading: boolean;
 }
 
-const ListenerContext = createContext<ListenerContextType | undefined>(undefined);
+const ListenerContext = createContext<ListenerContextType>({
+  profile: null,
+  loading: true,
+});
+
+export const useListener = () => useContext(ListenerContext);
 
 interface ListenerProviderProps {
-  children: ReactNode;
   user: firebase.User;
+  children: React.ReactNode;
 }
 
-export const ListenerProvider: React.FC<ListenerProviderProps> = ({ children, user }) => {
+export const ListenerProvider: React.FC<ListenerProviderProps> = ({ user, children }) => {
   const [profile, setProfile] = useState<ListenerProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!user) {
-        setLoading(false);
         setProfile(null);
+        setLoading(false);
         return;
-    };
+    }
+    
+    setLoading(true); // Reset loading state when user changes
 
-    const listenerRef = db.collection('listeners').doc(user.uid);
-    const unsubscribe = listenerRef.onSnapshot((docSnap) => {
-      if (docSnap.exists) {
-        setProfile(docSnap.data() as ListenerProfile);
-      } else {
-        // Handle case where listener profile doesn't exist yet
-        // Maybe redirect to a profile setup screen
-        console.warn(`Listener profile not found for UID: ${user.uid}`);
-        setProfile(null);
-      }
-      setLoading(false);
-    }, (error) => {
-        console.error("Error fetching listener profile:", error);
+    const unsubscribe = db.collection('listeners').doc(user.uid)
+      .onSnapshot(doc => {
+        if (doc.exists) {
+          setProfile(doc.data() as ListenerProfile);
+        } else {
+          console.warn("Listener profile not found in Firestore for UID:", user.uid);
+          setProfile(null);
+        }
         setLoading(false);
-    });
+      }, err => {
+        console.error("Error fetching listener profile:", err);
+        setProfile(null);
+        setLoading(false);
+      });
 
     return () => unsubscribe();
+  }, [user]);
+
+  // Effect for managing real-time presence
+  useEffect(() => {
+    if (!user) return;
+
+    const listenerStatusRef = rtdb.ref(`/status/${user.uid}`);
+    const firestoreListenerRef = db.collection('listeners').doc(user.uid);
+
+    const isOfflineForRTDB = {
+        isOnline: false,
+        lastActive: firebase.database.ServerValue.TIMESTAMP,
+    };
+    const isOnlineForRTDB = {
+        isOnline: true,
+        lastActive: firebase.database.ServerValue.TIMESTAMP,
+    };
+
+    rtdb.ref('.info/connected').on('value', (snapshot) => {
+        if (snapshot.val() === false) {
+            firestoreListenerRef.update({
+                isOnline: false,
+                lastActive: firebase.firestore.FieldValue.serverTimestamp(),
+            });
+            return;
+        }
+
+        listenerStatusRef.onDisconnect().set(isOfflineForRTDB).then(() => {
+            listenerStatusRef.set(isOnlineForRTDB);
+            firestoreListenerRef.update({
+                isOnline: true,
+                lastActive: firebase.firestore.FieldValue.serverTimestamp(),
+            });
+        });
+    });
+
+    return () => {
+        rtdb.ref('.info/connected').off();
+        listenerStatusRef.set(isOfflineForRTDB);
+        firestoreListenerRef.update({
+            isOnline: false,
+            lastActive: firebase.firestore.FieldValue.serverTimestamp(),
+        });
+    };
   }, [user]);
 
   return (
@@ -50,12 +100,4 @@ export const ListenerProvider: React.FC<ListenerProviderProps> = ({ children, us
       {children}
     </ListenerContext.Provider>
   );
-};
-
-export const useListener = (): ListenerContextType => {
-  const context = useContext(ListenerContext);
-  if (context === undefined) {
-    throw new Error('useListener must be used within a ListenerProvider');
-  }
-  return context;
 };
