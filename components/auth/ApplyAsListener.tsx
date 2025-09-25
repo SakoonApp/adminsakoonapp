@@ -1,6 +1,9 @@
 
+
 import React, { useState, useEffect, useRef } from 'react';
-import { db, serverTimestamp } from '../../utils/firebase';
+import { functions } from '../../utils/firebase';
+import { httpsCallable } from 'firebase/functions';
+import { useNotification } from '../../context/NotificationContext';
 
 // Icon for privacy note
 const LockIcon: React.FC<{ className?: string }> = ({ className }) => (
@@ -54,6 +57,7 @@ const ApplyAsListener: React.FC = () => {
   const [error, setError] = useState('');
   const [languageDropdownOpen, setLanguageDropdownOpen] = useState(false);
   const languageDropdownRef = useRef<HTMLDivElement>(null);
+  const { showNotification } = useNotification();
 
 
   useEffect(() => {
@@ -129,23 +133,24 @@ const ApplyAsListener: React.FC = () => {
         setError('');
 
         try {
-            // NOTE: Removed client-side duplicate check. It was failing due to security rules
-            // because an unauthenticated user cannot query the 'applications' or 'listeners' collections.
-            // Duplicate checks should be handled by an admin or a backend function.
-
-            const phone = formData.phone.trim();
+            // Use the secure backend function to submit the application.
+            // This ensures validation, security, and proper data handling.
+            const submitApp = httpsCallable(functions, 'listener_submitListenerApplication');
+            const result = await submitApp(formData);
             
-            // The security rule "allow create: if true" on the 'applications' collection permits this.
-            await db.collection('applications').add({
-                ...formData,
-                phone: phone, // ensure no whitespace
-                status: 'pending',
-                createdAt: serverTimestamp(),
-            });
-            setApplied(true);
+            const resultData = result.data as { success: boolean, message: string };
+            if (resultData.success) {
+                setApplied(true);
+                showNotification(resultData.message, 'success');
+            } else {
+                 throw new Error("An unknown error occurred.");
+            }
+
         } catch (err: any) {
             console.error("Application submission error:", err);
-            setError("आवेदन जमा करने में विफल। कृपया अपनी इंटरनेट जाँच करें और पुनः प्रयास करें।");
+            // The backend function returns user-friendly messages.
+            const message = err.message || "आवेदन जमा करने में विफल। कृपया अपनी इंटरनेट जाँच करें और पुनः प्रयास करें।";
+            setError(message);
         } finally {
             setLoading(false);
         }

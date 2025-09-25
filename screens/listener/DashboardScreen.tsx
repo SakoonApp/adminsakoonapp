@@ -1,16 +1,14 @@
-import React, { useState, useEffect, useMemo } from 'react';
-// FIX: The import for `Link` is correct for react-router-dom v5. The error was likely a cascading issue from other files using v6 syntax.
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useListener } from '../../context/ListenerContext';
 import { db } from '../../utils/firebase';
 import firebase from 'firebase/compat/app';
-// Fix: Use ListenerAppStatus instead of the non-existent ListenerStatus.
 import type { CallRecord, ListenerChatSession, ListenerAppStatus } from '../../types';
 import InstallPWAButton from '../../components/common/InstallPWAButton';
 import { useNotification } from '../../context/NotificationContext';
+import { usePTR } from '../../context/PTRContext';
 
 // Type definitions for combined activity feed
-// Fix: Use Omit to prevent type conflict on 'type' property from CallRecord.
 type CallActivity = Omit<CallRecord, 'type'> & { type: 'call'; timestamp: firebase.firestore.Timestamp; };
 type ChatActivity = ListenerChatSession & { type: 'chat'; timestamp: firebase.firestore.Timestamp; };
 type Activity = CallActivity | ChatActivity;
@@ -63,7 +61,6 @@ const StatCard: React.FC<{ title: string; value: React.ReactNode; icon: React.Re
     return linkTo ? <Link to={linkTo} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 rounded-xl">{content}</Link> : content;
 };
 
-// Fix: Refactor ActivityRow to safely access properties based on activity type.
 const ActivityRow: React.FC<{ activity: Activity }> = ({ activity }) => {
     const isCall = activity.type === 'call';
 
@@ -117,7 +114,14 @@ const StatusToggle: React.FC = () => {
         setOptimisticStatus(newStatus); 
 
         try {
-            await db.collection('listeners').doc(profile.uid).update({ appStatus: newStatus });
+            const listenerRef = db.collection('listeners').doc(profile.uid);
+            
+            // The toggle now ONLY controls availability (`appStatus`).
+            // The `isOnline` field is now handled automatically by the RTDB presence system.
+            await listenerRef.update({
+                appStatus: newStatus,
+            });
+
         } catch (error) {
             console.error("Failed to update status:", error);
             setOptimisticStatus(previousStatus);
@@ -146,24 +150,27 @@ const StatusToggle: React.FC = () => {
     
     const getSubtitle = () => {
         switch (optimisticStatus) {
-            case 'Available': return 'You are online and ready for calls.';
-            case 'Busy': return 'You are currently busy.';
+            case 'Available': return 'You are available for notifications.';
+            case 'Busy': return 'You are currently busy in a call.';
             case 'Break': return 'You are on a break.';
             case 'Offline':
-            default: return 'You are offline.';
+            default: return 'You are offline and won\'t get notifications.';
         }
     };
     
     // User cannot change status if they are busy or on a break
     const isLocked = optimisticStatus === 'Busy' || optimisticStatus === 'Break';
     
-    // For the UI, if the status is Busy or Break, we'll show it as "Online" visually but locked.
-    const isOnline = optimisticStatus === 'Available' || isLocked;
+    // The toggle's visual state is based on availability ('Available').
+    const isAvailable = optimisticStatus === 'Available';
 
     return (
         <div className="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm flex items-center justify-between gap-4">
             <div>
-                <h3 className="text-lg font-bold text-slate-900 dark:text-white">Active Status</h3>
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    Availability
+                    {profile.isOnline && <span className="w-2.5 h-2.5 bg-green-500 rounded-full" title="App is currently active"></span>}
+                </h3>
                 <p className="text-sm text-slate-500 dark:text-slate-400">{getSubtitle()}</p>
             </div>
 
@@ -171,9 +178,9 @@ const StatusToggle: React.FC = () => {
                 {/* Sliding Background */}
                 <div
                     className={`absolute top-1 bottom-1 left-1 w-[calc(50%-4px)] shadow-sm rounded-full transition-all duration-300 ease-in-out ${
-                        isOnline ? 'bg-green-500' : 'bg-slate-600 dark:bg-slate-900'
+                        isAvailable ? 'bg-green-500' : 'bg-slate-600 dark:bg-slate-900'
                     }`}
-                    style={{ transform: isOnline ? 'translateX(100%)' : 'translateX(0)' }}
+                    style={{ transform: isAvailable ? 'translateX(100%)' : 'translateX(0)' }}
                 />
                 
                 {/* Buttons */}
@@ -181,9 +188,9 @@ const StatusToggle: React.FC = () => {
                     onClick={() => handleStatusChange('Offline')}
                     disabled={isLocked}
                     className={`relative z-10 w-20 py-1.5 text-sm font-semibold rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 transition-colors duration-300 ${
-                        !isOnline ? 'text-white' : 'text-slate-500 dark:text-slate-300'
+                        !isAvailable ? 'text-white' : 'text-slate-500 dark:text-slate-300'
                     }`}
-                    aria-pressed={!isOnline}
+                    aria-pressed={!isAvailable}
                 >
                     Offline
                 </button>
@@ -191,9 +198,9 @@ const StatusToggle: React.FC = () => {
                     onClick={() => handleStatusChange('Available')}
                     disabled={isLocked}
                     className={`relative z-10 w-20 py-1.5 text-sm font-semibold rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 transition-colors duration-300 ${
-                        isOnline ? 'text-white' : 'text-slate-500 dark:text-slate-300'
+                        isAvailable ? 'text-white' : 'text-slate-500 dark:text-slate-300'
                     }`}
-                    aria-pressed={isOnline}
+                    aria-pressed={isAvailable}
                 >
                     Online
                 </button>
@@ -211,6 +218,19 @@ const DashboardScreen: React.FC = () => {
     const [loadingActivities, setLoadingActivities] = useState(true);
     const [earningsData, setEarningsData] = useState<{ today: number, week: number }>({ today: 0, week: 0 });
     const [loadingEarnings, setLoadingEarnings] = useState(true);
+    const { enablePTR, disablePTR } = usePTR();
+
+    const handleRefresh = useCallback(async () => {
+        console.log("Refreshing dashboard...");
+        // Since data is real-time via onSnapshot, this is for UX feedback
+        await new Promise(resolve => setTimeout(resolve, 1000));
+    }, []);
+
+    useEffect(() => {
+        enablePTR(handleRefresh);
+        return () => disablePTR();
+    }, [enablePTR, disablePTR, handleRefresh]);
+
 
     useEffect(() => {
         if (!profile?.uid) {

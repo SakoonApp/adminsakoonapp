@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { db, functions, auth, rtdb } from '../../utils/firebase';
+import firebase from 'firebase/compat/app';
+import { db, functions, auth } from '../../utils/firebase';
+import { httpsCallable } from 'firebase/functions';
 import type { ListenerProfile, Application } from '../../types';
-// FIX: Split react-router-dom imports to resolve export errors. Core hooks are now imported from 'react-router' and DOM-specific components from 'react-router-dom'.
-import { useNavigate } from 'react-router';
-import { Link } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
+import { usePTR } from '../../context/PTRContext';
 
 // --- Reusable Notification Banner ---
 const NotificationBanner: React.FC<{ message: string; type: 'error' | 'success'; onDismiss: () => void; }> = ({ message, type, onDismiss }) => {
@@ -77,11 +78,20 @@ const PayoutNotice: React.FC = () => {
 const AdminDashboardScreen: React.FC = () => {
   const [applications, setApplications] = useState<Application[]>([]);
   const [onboardingListeners, setOnboardingListeners] = useState<ListenerProfile[]>([]);
-  const [stats, setStats] = useState<any>(null);
+  const [stats, setStats] = useState<any>({
+      onlineListeners: 0,
+      activeListeners: 0,
+      dailyRevenue: '0.00',
+      dailyProfit: 'N/A',
+      dailyTransactions: 0,
+      activeCallsNow: 0,
+      activeChatsNow: 'N/A',
+  });
   const [loading, setLoading] = useState(true);
+  const [statsLoading, setStatsLoading] = useState(true);
   const [notification, setNotification] = useState<{message: string, type: 'error' | 'success'} | null>(null);
-  const [onlineCount, setOnlineCount] = useState(0);
   const navigate = useNavigate();
+  const { disablePTR } = usePTR();
 
   const handleLogout = async () => {
     try {
@@ -94,71 +104,93 @@ const AdminDashboardScreen: React.FC = () => {
   };
 
   useEffect(() => {
-    // Real-time listener for online users
-    const statusRef = rtdb.ref('status');
-    statusRef.on('value', (snapshot) => {
-        const statuses = snapshot.val();
-        if (statuses) {
-            const count = Object.values(statuses).filter((s: any) => s.isOnline).length;
-            setOnlineCount(count);
-        } else {
-            setOnlineCount(0);
-        }
-    });
-
-    return () => statusRef.off();
-  }, []);
-
-  useEffect(() => {
+    // This screen is real-time, so disable pull-to-refresh.
+    disablePTR();
+    
     setLoading(true);
+    setStatsLoading(true);
 
-    const fetchAllData = async () => {
-        try {
-            const getStats = functions.httpsCallable('getAdminDashboardStats');
-            const result = await getStats();
-            setStats(result.data);
-        } catch (error) {
-            console.error("Error fetching dashboard stats:", error);
-            setNotification({ message: 'Failed to load dashboard statistics.', type: 'error' });
-        }
-    };
-    fetchAllData();
+    // --- Real-time Listeners for Dashboard Data ---
 
-    const unsubApplications = db.collection('applications').where('status', '==', 'pending')
+    const unsubApplications = db.collection('applications')
+      .where('status', '==', 'pending')
+      .orderBy('createdAt', 'desc')
       .onSnapshot(snapshot => {
-        setApplications(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Application)));
-        setLoading(false); // Stop loading after first fetch
-      }, (err) => {
+        const pendingApps = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Application));
+        setApplications(pendingApps);
+        setLoading(false);
+      }, (err: any) => {
+        console.error("Error fetching applications:", err);
         setNotification({ message: 'Failed to load new applications.', type: 'error' });
+        setLoading(false);
       });
       
     const unsubOnboarding = db.collection('listeners').where('status', '==', 'onboarding_required')
       .onSnapshot(snapshot => {
         setOnboardingListeners(snapshot.docs.map(doc => doc.data() as ListenerProfile));
-      }, (err) => {
+      }, (err: any) => {
+        console.error("Error fetching onboarding listeners:", err);
         setNotification({ message: 'Failed to load onboarding listeners.', type: 'error' });
       });
+      
+    const unsubOnline = db.collection('listeners').where('appStatus', '==', 'Available')
+        .onSnapshot(snapshot => {
+            setStats(prev => ({ ...prev, onlineListeners: snapshot.size }));
+            setStatsLoading(false);
+        });
+        
+    const unsubActive = db.collection('listeners').where('status', '==', 'active')
+        .onSnapshot(snapshot => {
+            setStats(prev => ({ ...prev, activeListeners: snapshot.size }));
+        });
+
+    const unsubActiveCalls = db.collection('calls').where('status', '==', 'active')
+        .onSnapshot(snapshot => {
+            setStats(prev => ({ ...prev, activeCallsNow: snapshot.size }));
+        });
+
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const unsubTodayCalls = db.collection('calls').where('startTime', '>=', startOfToday)
+        .onSnapshot(snapshot => {
+            const dailyRevenue = snapshot.docs
+                .filter(doc => doc.data().status === 'completed')
+                .reduce((sum, doc) => sum + (doc.data().earnings || 0), 0);
+            
+            const dailyTransactions = snapshot.docs
+                .filter(doc => doc.data().status === 'completed').length;
+
+            setStats(prev => ({
+                ...prev,
+                dailyRevenue: dailyRevenue.toFixed(2),
+                dailyTransactions: dailyTransactions
+            }));
+        });
 
     return () => {
       unsubApplications();
       unsubOnboarding();
+      unsubOnline();
+      unsubActive();
+      unsubActiveCalls();
+      unsubTodayCalls();
     };
-  }, []);
+  }, [disablePTR]);
 
-  const handleApplicationAction = async (applicationId: string, action: 'approve' | 'reject') => {
-    if (!applicationId) return;
+  const handleApplicationAction = async (application: Application, action: 'approve' | 'reject') => {
+    if (!application.id) return;
     const confirmationText = action === 'approve'
-      ? 'Are you sure you want to approve this application? This will create a listener account and ask them to complete their profile.'
-      : 'Are you sure you want to reject this application?';
+      ? `Are you sure you want to approve this application for ${application.displayName}? This will create a listener account and ask them to complete their profile.`
+      : `Are you sure you want to reject this application for ${application.displayName}?`;
     if (!window.confirm(confirmationText)) return;
 
-    const functionName = action === 'approve' ? 'approveApplication' : 'rejectApplication';
+    const functionName = action === 'approve' ? 'listener_approveApplication' : 'listener_rejectApplication';
     try {
-        const callable = functions.httpsCallable(functionName);
-        await callable({ applicationId });
+        const callable = httpsCallable(functions, functionName);
+        await callable(application);
         setNotification({ message: `Application successfully ${action}d.`, type: 'success' });
     } catch (error: any) {
-        console.error(`Error ${action}ing application:`, error);
+        console.error(`Error ${action}ing application for ${application.displayName} (${application.id}):`, error);
         setNotification({ message: `Failed to ${action} application: ${error.message}`, type: 'error' });
     }
   };
@@ -187,8 +219,8 @@ const AdminDashboardScreen: React.FC = () => {
         <div>
             <h3 className="text-xl font-bold text-slate-800 dark:text-slate-200 mb-3">Main Dashboard Overview</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <StatCard title="Listeners Online" value={onlineCount} icon={<OnlineIcon />} loading={false} />
-                <StatCard title="Active Listeners" value={stats?.activeListeners ?? '...'} icon={<UserCheckIcon />} loading={!stats} />
+                <StatCard title="Listeners Online" value={stats.onlineListeners} icon={<OnlineIcon />} loading={statsLoading} />
+                <StatCard title="Active Listeners" value={stats.activeListeners} icon={<UserCheckIcon />} loading={statsLoading} />
                 <StatCard title="New Applications" value={applications.length} icon={<NewApplicationIcon />} loading={loading} />
                 <StatCard title="Pending Onboarding" value={onboardingListeners.length} icon={<UserClockIcon />} loading={loading} />
             </div>
@@ -198,22 +230,11 @@ const AdminDashboardScreen: React.FC = () => {
         <div>
             <h3 className="text-xl font-bold text-slate-800 dark:text-slate-200 mb-3">Daily Performance</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-                <StatCard title="Today's Revenue" value={`₹${stats?.dailyRevenue ?? '...'}`} icon={<RupeeIcon />} loading={!stats} />
-                <StatCard title="Today's Profit" value={`₹${stats?.dailyProfit ?? '...'}`} icon={<ProfitIcon />} loading={!stats} />
-                <StatCard title="Today's Transactions" value={stats?.dailyTransactions ?? '...'} icon={<TransactionIcon />} loading={!stats} />
-                <StatCard title="Active Calls Now" value={stats?.activeCallsNow ?? '...'} icon={<PhoneIcon />} loading={!stats} />
-                <StatCard title="Active Chats Now" value={stats?.activeChatsNow ?? '...'} icon={<ChatIcon />} loading={!stats} />
-            </div>
-        </div>
-        
-        {/* Advanced Analytics Grid */}
-        <div>
-            <h3 className="text-xl font-bold text-slate-800 dark:text-slate-200 mb-3">Advanced Analytics</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <StatCard title="Total Revenue" value={`₹${stats?.totalRevenue ?? '...'}`} icon={<RupeeIcon />} loading={!stats} />
-                <StatCard title="Top Earner (Week)" value={`...`} icon={<RupeeIcon />} loading={!stats} />
-                <StatCard title="Most Active (Week)" value={`...`} icon={<UserCheckIcon />} loading={!stats} />
-                <StatCard title="Peak Call Time" value={`...`} icon={<PhoneIcon />} loading={!stats} />
+                <StatCard title="Today's Revenue" value={`₹${stats.dailyRevenue}`} icon={<RupeeIcon />} loading={statsLoading} />
+                <StatCard title="Today's Profit" value={`${stats.dailyProfit}`} icon={<ProfitIcon />} loading={statsLoading} />
+                <StatCard title="Today's Transactions" value={stats.dailyTransactions} icon={<TransactionIcon />} loading={statsLoading} />
+                <StatCard title="Active Calls Now" value={stats.activeCallsNow} icon={<PhoneIcon />} loading={statsLoading} />
+                <StatCard title="Active Chats Now" value={`${stats.activeChatsNow}`} icon={<ChatIcon />} loading={statsLoading} />
             </div>
         </div>
 
@@ -243,8 +264,8 @@ const AdminDashboardScreen: React.FC = () => {
                                             </th>
                                             <td className="px-6 py-4 capitalize">{app.profession}</td>
                                             <td className="px-6 py-4 text-right space-x-2">
-                                                <button onClick={() => handleApplicationAction(app.id, 'approve')} className="font-medium text-green-600 dark:text-green-500 hover:underline">Approve</button>
-                                                <button onClick={() => handleApplicationAction(app.id, 'reject')} className="font-medium text-red-600 dark:text-red-500 hover:underline">Reject</button>
+                                                <button onClick={() => handleApplicationAction(app, 'approve')} className="font-medium text-green-600 dark:text-green-500 hover:underline">Approve</button>
+                                                <button onClick={() => handleApplicationAction(app, 'reject')} className="font-medium text-red-600 dark:text-red-500 hover:underline">Reject</button>
                                             </td>
                                         </tr>
                                     ))

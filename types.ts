@@ -17,6 +17,7 @@ export interface ListenerProfile {
   createdAt: firebase.firestore.Timestamp;
   onboardingComplete: boolean;
   isAdmin: boolean;
+  isOnline?: boolean; // Represents live connection status, now controlled by client.
   profession: string;
   languages: string[];
   avatarUrl: string;
@@ -46,11 +47,6 @@ export interface ListenerProfile {
   averagePerMinuteEarning?: number;
   averagePerMessageEarning?: number;
   dailyEarnings?: { [key: string]: number };
-  
-  // Real-time Presence
-  isOnline?: boolean;
-  lastActive?: firebase.firestore.Timestamp;
-  approvedBy?: string;
 }
 
 // Represents a single call record in the history.
@@ -66,6 +62,9 @@ export interface CallRecord {
   status: 'pending' | 'ringing' | 'active' | 'completed' | 'missed' | 'rejected' | 'cancelled';
   earnings?: number;
   type?: 'call'; // for activity feed
+  bonusAwarded?: boolean; // To track if a follow-up bonus was given
+  isCallback?: boolean; // For the new 2-minute callback feature
+  maxDurationSeconds?: number; // To enforce the 2-minute limit
 }
 
 // Represents a chat session between a listener and a user.
@@ -98,7 +97,7 @@ export interface EarningRecord {
     id: string;
     amount: number;
     timestamp: firebase.firestore.Timestamp;
-    type: 'call' | 'chat_session'; // Source of the earning
+    type: 'call' | 'chat_session' | 'bonus'; // Source of the earning
     sourceId: string; // callId or chatId
     userName: string;
 }

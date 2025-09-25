@@ -1,10 +1,6 @@
-
-
-
-
 import React, { useState, useEffect } from 'react';
-// FIX: Changed import from 'react-router-dom' to 'react-router' to resolve module export errors for hooks.
-import { useNavigate } from 'react-router';
+// FIX: Corrected react-router import. In v6, hooks should be imported from 'react-router-dom'.
+import { useNavigate } from 'react-router-dom';
 import firebase from 'firebase/compat/app';
 import { db } from '../../utils/firebase';
 import type { ListenerProfile } from '../../types';
@@ -65,20 +61,24 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ user }) => {
     setLoading(true);
     setError(null);
     try {
-      // The backend trigger will automatically change the status from 'onboarding_required' to 'active'
-      // once 'onboardingComplete' is set to true.
+      // Upon completing onboarding, update the profile details and, crucially,
+      // set the status to 'pending' for final admin review.
       const listenerUpdate = {
         avatarUrl: formData.selectedAvatar,
         city: formData.city,
         age: parseInt(formData.age, 10),
         onboardingComplete: true,
+        status: 'pending', // This is the key change to fix the loop.
+        // Also, clean up deprecated presence fields.
+        isOnline: firebase.firestore.FieldValue.delete(),
+        lastActive: firebase.firestore.FieldValue.delete(),
       };
 
       await db.collection('listeners').doc(user.uid).update(listenerUpdate);
       
-      // Since the status change is now automatic on the backend, we can optimistically redirect.
-      // The App.tsx router will pick up the 'active' status on the next load.
-      // For a brief moment, they might see the pending screen if redirection is faster than the backend trigger.
+      // The router in App.tsx will now pick up the 'pending' status and show the correct screen.
+      // We don't need to navigate here, as the state change in App.tsx will handle it.
+      // However, a direct navigate provides a faster user experience.
       navigate('/pending-approval', { replace: true });
 
     } catch (err) {
@@ -114,7 +114,7 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ user }) => {
             <main className="mt-4">
                 {loading && step === 1 && (
                     <div className="text-center p-8 bg-white dark:bg-slate-800 rounded-2xl shadow-lg">
-                        <svg className="animate-spin h-8 w-8 text-cyan-600 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <svg className="animate-spin h-8 w-8 text-cyan-600 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 FONT_24">
                             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                         </svg>

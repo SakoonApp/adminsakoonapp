@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useListener } from '../../context/ListenerContext';
 import { db } from '../../utils/firebase';
 import type { EarningRecord } from '../../types';
+import { usePTR } from '../../context/PTRContext';
 
 // --- Icons ---
 const TotalEarningsIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-white/80" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>;
@@ -43,26 +44,51 @@ const StatCard: React.FC<{ title: string; value: string; loading: boolean; icon:
     </div>
 );
 
-const TransactionRow: React.FC<{ transaction: EarningRecord }> = ({ transaction }) => (
-    <div className="flex items-center justify-between py-4">
-        <div className="flex items-center gap-3">
+const TransactionRow: React.FC<{ transaction: EarningRecord }> = ({ transaction }) => {
+    const isBonus = transaction.type === 'bonus';
+
+    const getIcon = () => {
+        if (isBonus) {
+            return (
+                <div className="w-10 h-10 rounded-full bg-yellow-100 dark:bg-yellow-900/50 flex items-center justify-center">
+                    <StarIcon />
+                </div>
+            );
+        }
+        // Default to call icon for 'call' or 'chat_session'
+        return (
             <div className="w-10 h-10 rounded-full bg-green-100 dark:bg-green-900/50 flex items-center justify-center">
                 <CallIcon />
             </div>
-            <div>
-                <p className="font-semibold text-slate-700 dark:text-slate-300">Call with {transaction.userName}</p>
-                <p className="text-sm text-slate-500 dark:text-slate-400">
-                    {transaction.timestamp.toDate().toLocaleString('en-IN', {
-                        day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit'
-                    })}
-                </p>
+        );
+    };
+
+    const getTitle = () => {
+        if (isBonus) return `Follow-up Bonus`;
+        if (transaction.type === 'chat_session') return `Chat with ${transaction.userName}`;
+        return `Call with ${transaction.userName}`;
+    };
+
+    return (
+        <div className="flex items-center justify-between py-4">
+            <div className="flex items-center gap-3">
+                {getIcon()}
+                <div>
+                    <p className="font-semibold text-slate-700 dark:text-slate-300">{getTitle()}</p>
+                    <p className="text-sm text-slate-500 dark:text-slate-400">
+                        {transaction.timestamp.toDate().toLocaleString('en-IN', {
+                            day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit'
+                        })}
+                    </p>
+                </div>
             </div>
+            <p className="font-bold text-green-600 dark:text-green-400 text-lg">
+                +₹{Number(transaction.amount).toFixed(2)}
+            </p>
         </div>
-        <p className="font-bold text-green-600 dark:text-green-400 text-lg">
-            +₹{Number(transaction.amount).toFixed(2)}
-        </p>
-    </div>
-);
+    );
+};
+
 
 const EarningsScreen: React.FC = () => {
     const { profile } = useListener();
@@ -70,6 +96,18 @@ const EarningsScreen: React.FC = () => {
     const [earnings, setEarnings] = useState<EarningsData>({ total: 0, today: 0, last7Days: 0, last30Days: 0 });
     const [transactions, setTransactions] = useState<EarningRecord[]>([]);
     const [advancedStats, setAdvancedStats] = useState<AdvancedStats>({ avgDaily: 0, bestDay: { date: '', amount: 0 } });
+    const { enablePTR, disablePTR } = usePTR();
+
+    const handleRefresh = useCallback(async () => {
+        // Since the data is real-time with onSnapshot, a "refresh" is mostly for UX.
+        console.log("Refreshing earnings data...");
+        await new Promise(resolve => setTimeout(resolve, 1000));
+    }, []);
+
+    useEffect(() => {
+        enablePTR(handleRefresh);
+        return () => disablePTR();
+    }, [enablePTR, disablePTR, handleRefresh]);
 
     useEffect(() => {
         if (!profile?.uid) {

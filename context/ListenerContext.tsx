@@ -26,72 +26,51 @@ export const ListenerProvider: React.FC<ListenerProviderProps> = ({ user, childr
 
   useEffect(() => {
     if (!user) {
-        setProfile(null);
-        setLoading(false);
-        return;
+      setProfile(null);
+      setLoading(false);
+      return;
     }
-    
-    setLoading(true); // Reset loading state when user changes
 
-    const unsubscribe = db.collection('listeners').doc(user.uid)
-      .onSnapshot(doc => {
-        if (doc.exists) {
-          setProfile(doc.data() as ListenerProfile);
-        } else {
-          console.warn("Listener profile not found in Firestore for UID:", user.uid);
-          setProfile(null);
-        }
-        setLoading(false);
-      }, err => {
-        console.error("Error fetching listener profile:", err);
+    setLoading(true);
+
+    const listenerRef = db.collection('listeners').doc(user.uid);
+
+    // Firestore listener for profile data
+    const unsubscribeFirestore = listenerRef.onSnapshot(doc => {
+      if (doc.exists) {
+        setProfile(doc.data() as ListenerProfile);
+      } else {
+        console.warn("Listener profile not found in Firestore for UID:", user.uid);
         setProfile(null);
-        setLoading(false);
-      });
+      }
+      setLoading(false);
+    }, err => {
+      console.error("Error fetching listener profile:", err);
+      setProfile(null);
+      setLoading(false);
+    });
 
-    return () => unsubscribe();
-  }, [user]);
+    // --- Automatic Presence System using Realtime Database ---
+    const statusRef = rtdb.ref('/status/' + user.uid);
+    const connectedRef = rtdb.ref('.info/connected');
 
-  // Effect for managing real-time presence
-  useEffect(() => {
-    if (!user) return;
+    const connectedListener = connectedRef.on('value', (snap) => {
+      if (snap.val() === true) {
+        // We're connected (or reconnected). Go online.
+        statusRef.set({ isOnline: true, last_changed: firebase.database.ServerValue.TIMESTAMP });
 
-    const listenerStatusRef = rtdb.ref(`/status/${user.uid}`);
-    const firestoreListenerRef = db.collection('listeners').doc(user.uid);
-
-    const isOfflineForRTDB = {
-        isOnline: false,
-        lastActive: firebase.database.ServerValue.TIMESTAMP,
-    };
-    const isOnlineForRTDB = {
-        isOnline: true,
-        lastActive: firebase.database.ServerValue.TIMESTAMP,
-    };
-
-    rtdb.ref('.info/connected').on('value', (snapshot) => {
-        if (snapshot.val() === false) {
-            firestoreListenerRef.update({
-                isOnline: false,
-                lastActive: firebase.firestore.FieldValue.serverTimestamp(),
-            });
-            return;
-        }
-
-        listenerStatusRef.onDisconnect().set(isOfflineForRTDB).then(() => {
-            listenerStatusRef.set(isOnlineForRTDB);
-            firestoreListenerRef.update({
-                isOnline: true,
-                lastActive: firebase.firestore.FieldValue.serverTimestamp(),
-            });
-        });
+        // When the client disconnects, update their status to offline.
+        // This is the core of the presence system.
+        statusRef.onDisconnect().set({ isOnline: false, last_changed: firebase.database.ServerValue.TIMESTAMP });
+      }
     });
 
     return () => {
-        rtdb.ref('.info/connected').off();
-        listenerStatusRef.set(isOfflineForRTDB);
-        firestoreListenerRef.update({
-            isOnline: false,
-            lastActive: firebase.firestore.FieldValue.serverTimestamp(),
-        });
+      unsubscribeFirestore();
+      connectedRef.off('value', connectedListener); // Detach the listener
+      // On clean component unmount, set offline status. This isn't strictly necessary
+      // because onDisconnect handles browser close, but it provides a faster response.
+      statusRef.set({ isOnline: false, last_changed: firebase.database.ServerValue.TIMESTAMP });
     };
   }, [user]);
 
