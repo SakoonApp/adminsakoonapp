@@ -1,4 +1,5 @@
 
+
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
@@ -53,4 +54,12 @@ export default defineConfig({
       },
     })
   ],
+  build: {
+    rollupOptions: {
+      // FIX: Corrected a TypeScript error by simplifying the input path.
+      // The explicit `resolve(process.cwd(), ...)` caused type issues and is
+      // equivalent to Vite's default behavior.
+      input: 'index.html',
+    },
+  },
 });

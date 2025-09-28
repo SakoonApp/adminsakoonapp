@@ -1,5 +1,6 @@
+
 import { auth, functions } from './firebase';
-import { httpsCallable } from 'firebase/functions';
+// import { httpsCallable } from 'firebase/functions'; // FIX: Remove modular import
 
 // ZegoUIKitPrebuilt is loaded from a script tag in index.html
 declare global {
@@ -21,9 +22,8 @@ export const fetchZegoToken = async (roomId: string): Promise<string> => {
             throw new Error("User not logged in.");
         }
 
-        // FIX: Called the correct, simplified cloud function for utility token generation.
-        // The 'generateZegoToken' function is for the end-user app and has different logic.
-        const generateToken = httpsCallable(functions, 'generateZegoTokenUtility');
+        // FIX: Use the compat syntax for calling the function
+        const generateToken = functions.httpsCallable('generateZegoTokenForListener');
         const result = await generateToken({ roomId });
 
         // The httpsCallable result has the data inside a `data` property.

@@ -3,8 +3,7 @@ import 'firebase/compat/auth';
 import 'firebase/compat/firestore';
 import 'firebase/compat/database';
 import 'firebase/compat/storage';
-// Remove compat import for functions: import 'firebase/compat/functions';
-import { getFunctions } from 'firebase/functions';
+import 'firebase/compat/functions'; // FIX: Use compat version for functions
 import 'firebase/compat/messaging';
 
 
@@ -20,20 +19,21 @@ const firebaseConfig = {
   measurementId: "G-6VD83ZC2HP"
 };
 
-const app = firebase.initializeApp(firebaseConfig);
+firebase.initializeApp(firebaseConfig);
 
 export const auth = firebase.auth();
 export const db = firebase.firestore();
 export const rtdb = firebase.database();
 export const storage = firebase.storage();
-export const functions = getFunctions(app, 'asia-south1');
+// FIX: Get functions instance using the compat syntax for a specific region
+export const functions = firebase.app().functions('asia-south1');
 export const messaging = firebase.messaging.isSupported() ? firebase.messaging() : null;
 export const serverTimestamp = firebase.firestore.FieldValue.serverTimestamp;
 
 // Uncomment the following lines to use Firebase Emulators in development
 /*
 if (window.location.hostname === "localhost") {
-  auth.useEmulator("http://127.0.0.1:9099");
+  auth.useEmulator("http://1227.0.0.1:9099");
   db.useEmulator("127.0.0.1", 8080);
   rtdb.useEmulator("127.0.0.1", 9000);
   storage.useEmulator("127.0.0.1", 9199);

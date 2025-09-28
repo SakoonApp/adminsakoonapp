@@ -2,9 +2,6 @@
 import * as functionsV1 from "firebase-functions/v1";
 import * as admin from "firebase-admin";
 
-if (admin.apps.length === 0) {
-  admin.initializeApp();
-}
 const db = admin.firestore();
 
 export const onDeleteListener = functionsV1

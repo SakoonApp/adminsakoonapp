@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 // FIX: Corrected react-router import. In v6, hooks should be imported from 'react-router-dom'.
 import { useNavigate, useLocation } from 'react-router-dom';
 import { messaging, db } from '../../utils/firebase';
@@ -100,6 +100,26 @@ const IncomingCallManager: React.FC = () => {
   const location = useLocation();
   const [incomingCall, setIncomingCall] = useState<{ userName: string, callId: string } | null>(null);
 
+  const handleReject = useCallback(async (callIdToReject: string) => {
+    stopRingtone();
+    try {
+      const callRef = db.collection('calls').doc(callIdToReject);
+      const doc = await callRef.get();
+      // To avoid race conditions, only reject if the call is still 'ringing' or 'pending'.
+      if (doc.exists && ['pending', 'ringing'].includes(doc.data()?.status)) {
+        await callRef.update({ status: 'rejected' });
+        console.log(`Call ${callIdToReject} rejected by listener.`);
+      } else {
+        console.log(`Call ${callIdToReject} was already handled or its status is not pending/ringing.`);
+      }
+    } catch (err) {
+      console.error("Failed to reject call:", err);
+    }
+    // Only clear the UI if the rejected call is the one currently displayed.
+    setIncomingCall(currentCall => (currentCall?.callId === callIdToReject ? null : currentCall));
+  }, []);
+
+  // Effect to setup message listener. Re-runs only when profile or location changes.
   useEffect(() => {
     if (!messaging || !profile) {
       return;
@@ -143,23 +163,24 @@ const IncomingCallManager: React.FC = () => {
       const isSilent = silent === 'true';
 
       if (type === 'incoming_call') {
-        // Default to true if setting is undefined, and not a silent notification
-        if (profile.notificationSettings?.calls !== false && !isSilent) {
-          playRingtone();
-        }
-        
-        // If another call is already ringing, reject the new one automatically to avoid UI confusion.
-        if (incomingCall) {
+        // Use functional update to access current state without dependency
+        setIncomingCall(currentCall => {
+          // If another call is already ringing, reject the new one automatically.
+          if (currentCall) {
             console.warn(`New call received while another is ringing. Auto-rejecting call ${callId}.`);
             db.collection('calls').doc(callId).update({ status: 'rejected' });
-            return;
-        }
+            return currentCall; // Keep the existing call on screen
+          }
 
-        setIncomingCall({ userName, callId });
-        
+          // Default to true if setting is undefined, and not a silent notification
+          if (profile.notificationSettings?.calls !== false && !isSilent) {
+            playRingtone();
+          }
+          // Set the new incoming call
+          return { userName, callId };
+        });
       } else if (type === 'new_message') {
           const isOnChatScreen = location.pathname.includes('/chat');
-          // Default to true if setting is undefined
           if (!isOnChatScreen && profile.notificationSettings?.messages !== false) {
               playMessageTone();
           }
@@ -170,53 +191,27 @@ const IncomingCallManager: React.FC = () => {
       unsubscribe();
       stopRingtone(); // Ensure ringtone stops if component unmounts while ringing
     };
-  }, [profile, navigate, location, incomingCall]);
+  }, [profile, location.pathname]);
 
 
+  // Effect to handle the timeout for the currently displayed call
+  useEffect(() => {
+    if (incomingCall) {
+      const timer = setTimeout(() => {
+        console.log(`Incoming call ${incomingCall.callId} timed out and was missed.`);
+        handleReject(incomingCall.callId);
+      }, 30000); // 30-second timeout
+
+      return () => clearTimeout(timer);
+    }
+  }, [incomingCall, handleReject]);
+  
   const handleAccept = () => {
     if (!incomingCall) return;
     stopRingtone();
     navigate(`/call/${incomingCall.callId}`);
     setIncomingCall(null);
   };
-
-  const handleReject = async (callIdToReject?: string) => {
-    const callId = callIdToReject || incomingCall?.callId;
-    if (!callId) return;
-
-    stopRingtone();
-    try {
-      const callRef = db.collection('calls').doc(callId);
-      const doc = await callRef.get();
-      // To avoid race conditions, only reject if the call is still 'ringing' or 'pending'.
-      if (doc.exists && ['pending', 'ringing'].includes(doc.data()?.status)) {
-        await callRef.update({ status: 'rejected' });
-        console.log(`Call ${callId} rejected by listener.`);
-      } else {
-        console.log(`Call ${callId} was already handled or its status is not pending/ringing.`);
-      }
-    } catch (err) {
-      console.error("Failed to reject call:", err);
-    }
-    // Only clear the UI if the rejected call is the one currently displayed.
-    if (incomingCall && callId === incomingCall.callId) {
-        setIncomingCall(null);
-    }
-  };
-  
-  // Auto-reject call after a timeout if no action is taken.
-  useEffect(() => {
-    if (incomingCall) {
-      const timer = setTimeout(() => {
-        console.log(`Incoming call ${incomingCall.callId} timed out and was missed.`);
-        // Pass callId directly to handleReject to avoid closure issues
-        handleReject(incomingCall.callId);
-      }, 30000); // 30-second timeout
-
-      return () => clearTimeout(timer);
-    }
-  }, [incomingCall]);
-
 
   if (!incomingCall) {
     return null;
@@ -229,7 +224,7 @@ const IncomingCallManager: React.FC = () => {
             <p className="text-slate-300">{incomingCall.userName || 'A user'} is calling...</p>
         </div>
         <div className="flex gap-3">
-            <button onClick={() => handleReject()} className="bg-red-500 hover:bg-red-600 active:bg-red-700 font-bold py-3 px-5 rounded-lg transition-transform hover:scale-105">Reject</button>
+            <button onClick={() => handleReject(incomingCall.callId)} className="bg-red-500 hover:bg-red-600 active:bg-red-700 font-bold py-3 px-5 rounded-lg transition-transform hover:scale-105">Reject</button>
             <button onClick={handleAccept} className="bg-green-500 hover:bg-green-600 active:bg-green-700 font-bold py-3 px-5 rounded-lg transition-transform hover:scale-105">Accept</button>
         </div>
     </div>
